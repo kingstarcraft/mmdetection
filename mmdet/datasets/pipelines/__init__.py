@@ -8,8 +8,8 @@ from .instaboost import InstaBoost
 from .loading import (LoadAnnotations, LoadImageFromFile, LoadImageFromWebcam,
                       LoadMultiChannelImageFromFiles, LoadProposals)
 from .test_time_aug import MultiScaleFlipAug
-from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, Normalize,
-                         Pad, PhotoMetricDistortion, RandomCenterCropPad,
+from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MinIoFRandomCrop, Normalize, ReinhardNormalize,
+                         Pad, NormalizeDistortion, ReinhardDistortion, PhotoMetricDistortion, RandomCenterCropPad,
                          RandomCrop, RandomFlip, RandomShift, Resize,
                          SegRescale)
 
@@ -18,9 +18,9 @@ __all__ = [
     'Transpose', 'Collect', 'DefaultFormatBundle', 'LoadAnnotations',
     'LoadImageFromFile', 'LoadImageFromWebcam',
     'LoadMultiChannelImageFromFiles', 'LoadProposals', 'MultiScaleFlipAug',
-    'Resize', 'RandomFlip', 'Pad', 'RandomCrop', 'Normalize', 'SegRescale',
-    'MinIoURandomCrop', 'Expand', 'PhotoMetricDistortion', 'Albu',
-    'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
+    'Resize', 'RandomFlip', 'Pad', 'RandomCrop', 'Normalize', 'ReinhardNormalize', 'SegRescale',
+    'MinIoURandomCrop', 'MinIoFRandomCrop', 'Expand', 'NormalizeDistortion', 'ReinhardDistortion',
+    'PhotoMetricDistortion', 'Albu', 'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate', 'RandomShift'
 ]

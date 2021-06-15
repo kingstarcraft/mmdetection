@@ -4,6 +4,7 @@ import inspect
 import mmcv
 import numpy as np
 from numpy import random
+from zero.image import normalizer
 
 from mmdet.core import PolygonMasks
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
@@ -675,6 +676,32 @@ class Normalize:
 
 
 @PIPELINES.register_module()
+class ReinhardNormalize:
+    def __int__(self, mean, std, rgb=True, clip_range=(0, 255)):
+        self.mean = np.array(mean, dtype=np.float32)
+        self.std = np.array(std, dtype=np.float32)
+        self.clip_range = clip_range
+        normalize = normalizer.ReinhardNormalRGB if rgb else normalizer.ReinhardNormalBGR
+        self.normalizer = normalize(mean, std)
+
+    def __call__(self, results):
+        for key in results.get('img_fields', ['img']):
+            reinhard = self.normalizer(results[key])
+            results[key] = reinhard if self.clip_range is None else np.clip(reinhard, *self.clip_range)
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += '(\nmean='
+        repr_str += f'({self.mean[0]},{self.mean[1]},{self.mean[2]})'
+        repr_str += 'std='
+        repr_str += f'({self.std[0]},{self.std[1]},{self.std[2]})'
+        repr_str += f'rgb={isinstance(self.normalizer, normalizer.ReinhardNormalRGB)}'
+        repr_str += 'clip_range='
+        repr_str += 'None' if self.clip_range is None else f'{self.clip_range[0]}==>{self.clip_range[1]})'
+        return repr_str
+
+
+@PIPELINES.register_module()
 class RandomCrop:
     """Random crop the image & bboxes & masks.
 
@@ -894,6 +921,80 @@ class SegRescale:
 
     def __repr__(self):
         return self.__class__.__name__ + f'(scale_factor={self.scale_factor})'
+
+
+@PIPELINES.register_module()
+class NormalizeDistortion:
+    def __init__(self, mean_range, std_range, to_rgb=True):
+        self.mean_range = np.array(mean_range, dtype=np.float32)
+        self.std_range = np.array(std_range, dtype=np.float32)
+        self.to_rgb = to_rgb
+
+    def __call__(self, results):
+        """Call function to normalize images.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Normalized results, 'img_norm_cfg' key is added into
+                result dict.
+        """
+        mean = np.random.uniform(self.mean_range[0], self.mean_range[-1])
+        std = np.random.uniform(self.std_range[0], self.std_range[-1])
+        for key in results.get('img_fields', ['img']):
+            results[key] = mmcv.imnormalize(results[key], mean, std, self.to_rgb)
+        results['img_norm_cfg'] = dict(
+            mean=mean, std=std, to_rgb=self.to_rgb)
+        return results
+
+    def __int__(self):
+        repr_str = self.__class__.__name__
+        repr_str += '\n(mean_range='
+        repr_str += f'({self.mean_range[0][0]},{self.mean_range[0][1]},{self.mean_range[0][2]})==>'
+        repr_str += f'({self.mean_range[1][0]},{self.mean_range[1][1]},{self.mean_range[1][2]})\n'
+        repr_str += 'std_range='
+        repr_str += f'({self.std_range[0][0]},{self.std_range[0][1]},{self.std_range[0][2]})==>'
+        repr_str += f'({self.std_range[1][0]},{self.std_range[1][1]},{self.std_range[1][2]})\n'
+        repr_str += f'to_rgb={self.to_rgb}\n'
+
+
+@PIPELINES.register_module()
+class ReinhardDistortion:
+    def __init__(self, mean_range, std_range, rgb=True, clip_range=(0, 255)):
+        mean_range = np.array(mean_range)
+        std_range = np.array(std_range)
+        assert 1 <= mean_range.ndim <= 2
+        assert 1 <= std_range.ndim <= 2
+
+        self.mean_range = mean_range if mean_range.shape[0] == 2 else mean_range.T
+        self.std_range = std_range if std_range.shape[0] == 2 else std_range.T
+        self.std_diff = np.abs(self.mean_range[-1] - self.mean_range[0]) / 2
+        self.mean_diff = np.abs(self.std_range[-1] - self.std_range[0]) / 2
+        self.clip_range = clip_range
+        self.normalizer = normalizer.ReinhardNormalRGB() if rgb else normalizer.ReinhardNormalBGR()
+
+    def __call__(self, results):
+        mean = np.random.uniform(self.mean_range[0], self.mean_range[-1])
+        std = np.random.uniform(self.std_range[0], self.std_range[-1])
+        mean_offset = np.random.uniform(-self.mean_diff, self.mean_diff)
+        std_offset = np.random.uniform(-self.std_diff, self.std_diff)
+        for key in results.get('img_fields', ['img']):
+            reinhard = self.normalizer(results[key], (mean, std), offset=(mean_offset, std_offset))
+            results[key] = reinhard if self.clip_range is None else np.clip(reinhard, *self.clip_range)
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += '\n(mean_range='
+        repr_str += f'({self.mean_range[0][0]},{self.mean_range[0][1]},{self.mean_range[0][2]})==>'
+        repr_str += f'({self.mean_range[1][0]},{self.mean_range[1][1]},{self.mean_range[1][2]})\n'
+        repr_str += 'std_range='
+        repr_str += f'({self.std_range[0][0]},{self.std_range[0][1]},{self.std_range[0][2]})==>'
+        repr_str += f'({self.std_range[1][0]},{self.std_range[1][1]},{self.std_range[1][2]})\n'
+        repr_str += f'rgb={isinstance(self.normalizer, normalizer.ReinhardNormalRGB)}\n'
+        repr_str += 'clip_range='
+        repr_str += 'None' if self.clip_range is None else f'{self.clip_range[0]}==>{self.clip_range[1]})'
+        return repr_str
 
 
 @PIPELINES.register_module()
@@ -1229,6 +1330,146 @@ class MinIoURandomCrop:
     def __repr__(self):
         repr_str = self.__class__.__name__
         repr_str += f'(min_ious={self.min_ious}, '
+        repr_str += f'min_crop_size={self.min_crop_size}, '
+        repr_str += f'bbox_clip_border={self.bbox_clip_border})'
+        return repr_str
+
+
+@PIPELINES.register_module()
+class MinIoFRandomCrop:
+    """Random crop the image & bboxes, the cropped patches have minimum IoA
+    requirement with original image & bboxes, the IoA threshold is randomly
+    selected from min_ioAs.
+
+    Args:
+        min_iofs (tuple): minimum IoA threshold for all intersections with
+        bounding boxes
+        min_crop_size (float): minimum crop's size (i.e. h,w := a*h, a*w,
+        where a >= min_crop_size).
+        bbox_clip_border (bool, optional): Whether clip the objects outside
+            the border of the image. Defaults to True.
+
+    Note:
+        The keys for bboxes, labels and masks should be paired. That is, \
+        `gt_bboxes` corresponds to `gt_labels` and `gt_masks`, and \
+        `gt_bboxes_ignore` to `gt_labels_ignore` and `gt_masks_ignore`.
+    """
+
+    def __init__(self,
+                 min_iofs=(0.8, 0.9, 1.0),
+                 min_crop_size=0.3,
+                 bbox_clip_border=True):
+        # 1: return ori img
+        self.min_iofs = min_iofs
+        self.sample_mode = (1, *min_iofs, 0)
+        self.min_crop_size = min_crop_size
+        self.bbox_clip_border = bbox_clip_border
+        self.bbox2label = {
+            'gt_bboxes': 'gt_labels',
+            'gt_bboxes_ignore': 'gt_labels_ignore'
+        }
+        self.bbox2mask = {
+            'gt_bboxes': 'gt_masks',
+            'gt_bboxes_ignore': 'gt_masks_ignore'
+        }
+
+    def __call__(self, results):
+        """Call function to crop images and bounding boxes with minimum IoF
+        constraint.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Result dict with images and bounding boxes cropped, \
+                'img_shape' key is updated.
+        """
+
+        if 'img_fields' in results:
+            assert results['img_fields'] == ['img'], \
+                'Only single img_fields is allowed'
+        img = results['img']
+        assert 'bbox_fields' in results
+        boxes = [results[key] for key in results['bbox_fields']]
+        boxes = np.concatenate(boxes, 0)
+        h, w, c = img.shape
+        while True:
+            mode = random.choice(self.sample_mode)
+            self.mode = mode
+            if mode == 1:
+                return results
+
+            min_iof = mode
+            for i in range(50):
+                new_w = random.uniform(self.min_crop_size * w, w)
+                new_h = random.uniform(self.min_crop_size * h, h)
+
+                # h / w in [0.5, 2]
+                if new_h / new_w < 0.5 or new_h / new_w > 2:
+                    continue
+
+                left = random.uniform(w - new_w)
+                top = random.uniform(h - new_h)
+
+                patch = np.array(
+                    (int(left), int(top), int(left + new_w), int(top + new_h)))
+                # Line or point crop is not allowed
+                if patch[2] == patch[0] or patch[3] == patch[1]:
+                    continue
+                overlaps = bbox_overlaps(
+                    patch.reshape(-1, 4), boxes.reshape(-1, 4), mode='iof').reshape(-1)
+                if len(overlaps) > 0 and overlaps.min() < min_iof:
+                    continue
+
+                # center of boxes should inside the crop img
+                # only adjust boxes and instance masks when the gt is not empty
+                if len(overlaps) > 0:
+                    # adjust boxes
+                    def is_center_of_bboxes_in_patch(boxes, patch):
+                        center = (boxes[:, :2] + boxes[:, 2:]) / 2
+                        mask = ((center[:, 0] > patch[0]) *
+                                (center[:, 1] > patch[1]) *
+                                (center[:, 0] < patch[2]) *
+                                (center[:, 1] < patch[3]))
+                        return mask
+
+                    mask = is_center_of_bboxes_in_patch(boxes, patch)
+                    if not mask.any():
+                        continue
+                    for key in results.get('bbox_fields', []):
+                        boxes = results[key].copy()
+                        mask = is_center_of_bboxes_in_patch(boxes, patch)
+                        boxes = boxes[mask]
+                        if self.bbox_clip_border:
+                            boxes[:, 2:] = boxes[:, 2:].clip(max=patch[2:])
+                            boxes[:, :2] = boxes[:, :2].clip(min=patch[:2])
+                        boxes -= np.tile(patch[:2], 2)
+
+                        results[key] = boxes
+                        # labels
+                        label_key = self.bbox2label.get(key)
+                        if label_key in results:
+                            results[label_key] = results[label_key][mask]
+
+                        # mask fields
+                        mask_key = self.bbox2mask.get(key)
+                        if mask_key in results:
+                            results[mask_key] = results[mask_key][
+                                mask.nonzero()[0]].crop(patch)
+                # adjust the img no matter whether the gt is empty before crop
+                img = img[patch[1]:patch[3], patch[0]:patch[2]]
+                results['img'] = img
+                results['img_shape'] = img.shape
+
+                # seg fields
+                for key in results.get('seg_fields', []):
+                    results[key] = results[key][patch[1]:patch[3],
+                                   patch[0]:patch[2]]
+                return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(min_iofs={self.min_iofs}, '
         repr_str += f'min_crop_size={self.min_crop_size}, '
         repr_str += f'bbox_clip_border={self.bbox_clip_border})'
         return repr_str
