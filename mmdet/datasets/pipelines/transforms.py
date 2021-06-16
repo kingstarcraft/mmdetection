@@ -1434,14 +1434,14 @@ class MinOverlapRandomCrop:
                                 (center[:, 1] < patch[3]))
                         return mask
 
-                    mask = is_center_of_bboxes_in_patch(boxes, patch)
-                    if not mask.any():
-                        continue
+                    # mask = is_center_of_bboxes_in_patch(boxes, patch)
+                    # if not mask.any():
+                    #     continue
                     for key in results.get('bbox_fields', []):
                         boxes = results[key].copy()
                         mask = is_center_of_bboxes_in_patch(boxes, patch)
                         boxes = boxes[mask]
-                        if self.bbox_clip_border:
+                        if self.bbox_clip_border and mask.any():
                             boxes[:, 2:] = boxes[:, 2:].clip(max=patch[2:])
                             boxes[:, :2] = boxes[:, :2].clip(min=patch[:2])
                         boxes -= np.tile(patch[:2], 2)
