@@ -1364,7 +1364,7 @@ class MinOverlapRandomCrop:
                  bbox_clip_border=True):
         # 1: return ori img
         self.min_ratios = min_ratios
-        self.sample_mode = (1, *min_ratios, 0)
+        self.sample_mode = (1, *min_ratios)
         self.min_crop_size = min_crop_size
         self.bbox_clip_border = bbox_clip_border
         self.method = method
@@ -1378,7 +1378,7 @@ class MinOverlapRandomCrop:
         }
 
     def __call__(self, results):
-        """Call function to crop images and bounding boxes with minimum IoF
+        """Call function to crop images and bounding boxes with minimum ratio
         constraint.
 
         Args:
@@ -1400,9 +1400,6 @@ class MinOverlapRandomCrop:
         while True:
             mode = random.choice(self.sample_mode)
             self.mode = mode
-            if mode == 1:
-                return results
-
             min_ratio = mode
             for i in range(50):
                 new_w = random.uniform(self.min_crop_size * w, w)
