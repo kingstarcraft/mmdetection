@@ -14,7 +14,7 @@ def bbox_overlaps(bboxes1, bboxes2, mode='iou', eps=1e-6):
         ious(ndarray): shape (n, k)
     """
 
-    assert mode in ['iou', 'iof']
+    assert mode in ['iou', 'iof', 'ioa']
 
     bboxes1 = bboxes1.astype(np.float32)
     bboxes2 = bboxes2.astype(np.float32)
@@ -39,6 +39,8 @@ def bbox_overlaps(bboxes1, bboxes2, mode='iou', eps=1e-6):
             y_end - y_start, 0)
         if mode == 'iou':
             union = area1[i] + area2 - overlap
+        elif mode == 'ioa':
+            union = area1[i] if exchange else area2
         else:
             union = area1[i] if not exchange else area2
         union = np.maximum(union, eps)

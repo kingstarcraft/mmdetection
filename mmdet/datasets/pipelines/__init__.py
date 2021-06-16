@@ -8,7 +8,7 @@ from .instaboost import InstaBoost
 from .loading import (LoadAnnotations, LoadImageFromFile, LoadImageFromWebcam,
                       LoadMultiChannelImageFromFiles, LoadProposals)
 from .test_time_aug import MultiScaleFlipAug
-from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MinIoFRandomCrop, Normalize, ReinhardNormalize,
+from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MinOverlapRandomCrop, Normalize, ReinhardNormalize,
                          Pad, NormalizeDistortion, ReinhardDistortion, PhotoMetricDistortion, RandomCenterCropPad,
                          RandomCrop, RandomFlip, RandomShift, Resize,
                          SegRescale)
@@ -19,7 +19,7 @@ __all__ = [
     'LoadImageFromFile', 'LoadImageFromWebcam',
     'LoadMultiChannelImageFromFiles', 'LoadProposals', 'MultiScaleFlipAug',
     'Resize', 'RandomFlip', 'Pad', 'RandomCrop', 'Normalize', 'ReinhardNormalize', 'SegRescale',
-    'MinIoURandomCrop', 'MinIoFRandomCrop', 'Expand', 'NormalizeDistortion', 'ReinhardDistortion',
+    'MinIoURandomCrop', 'MinOverlapRandomCrop', 'Expand', 'NormalizeDistortion', 'ReinhardDistortion',
     'PhotoMetricDistortion', 'Albu', 'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate', 'RandomShift'

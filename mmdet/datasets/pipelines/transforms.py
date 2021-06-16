@@ -532,7 +532,7 @@ class RandomShift:
                 bbox_w = bboxes[..., 2] - bboxes[..., 0]
                 bbox_h = bboxes[..., 3] - bboxes[..., 1]
                 valid_inds = (bbox_w > self.filter_thr_px) & (
-                    bbox_h > self.filter_thr_px)
+                        bbox_h > self.filter_thr_px)
                 # If the shift does not contain any gt-bbox area, skip this
                 # image.
                 if key == 'gt_bboxes' and not valid_inds.any():
@@ -688,6 +688,7 @@ class ReinhardNormalize:
         for key in results.get('img_fields', ['img']):
             reinhard = self.normalizer(results[key])
             results[key] = reinhard if self.clip_range is None else np.clip(reinhard, *self.clip_range)
+        return results
 
     def __repr__(self):
         repr_str = self.__class__.__name__
@@ -742,7 +743,7 @@ class RandomCrop:
                  allow_negative_crop=False,
                  bbox_clip_border=True):
         if crop_type not in [
-                'relative_range', 'relative', 'absolute', 'absolute_range'
+            'relative_range', 'relative', 'absolute', 'absolute_range'
         ]:
             raise ValueError(f'Invalid crop_type {crop_type}.')
         if crop_type in ['absolute', 'absolute_range']:
@@ -805,7 +806,7 @@ class RandomCrop:
                 bboxes[:, 0::2] = np.clip(bboxes[:, 0::2], 0, img_shape[1])
                 bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0])
             valid_inds = (bboxes[:, 2] > bboxes[:, 0]) & (
-                bboxes[:, 3] > bboxes[:, 1])
+                    bboxes[:, 3] > bboxes[:, 1])
             # If the crop does not contain any gt-bbox area and
             # allow_negative_crop is False, skip this image.
             if (key == 'gt_bboxes' and not valid_inds.any()
@@ -822,7 +823,7 @@ class RandomCrop:
             if mask_key in results:
                 results[mask_key] = results[mask_key][
                     valid_inds.nonzero()[0]].crop(
-                        np.asarray([crop_x1, crop_y1, crop_x2, crop_y2]))
+                    np.asarray([crop_x1, crop_y1, crop_x2, crop_y2]))
 
         # crop semantic seg
         for key in results.get('seg_fields', []):
@@ -982,6 +983,7 @@ class ReinhardDistortion:
         for key in results.get('img_fields', ['img']):
             reinhard = self.normalizer(results[key], (mean, std), offset=(mean_offset, std_offset))
             results[key] = reinhard if self.clip_range is None else np.clip(reinhard, *self.clip_range)
+        return results
 
     def __repr__(self):
         repr_str = self.__class__.__name__
@@ -1044,7 +1046,7 @@ class PhotoMetricDistortion:
                 'Only single img_fields is allowed'
         img = results['img']
         assert img.dtype == np.float32, \
-            'PhotoMetricDistortion needs the input image of dtype np.float32,'\
+            'PhotoMetricDistortion needs the input image of dtype np.float32,' \
             ' please set "to_float32=True" in "LoadImageFromFile" pipeline'
         # random brightness
         if random.randint(2):
@@ -1324,7 +1326,7 @@ class MinIoURandomCrop:
                 # seg fields
                 for key in results.get('seg_fields', []):
                     results[key] = results[key][patch[1]:patch[3],
-                                                patch[0]:patch[2]]
+                                   patch[0]:patch[2]]
                 return results
 
     def __repr__(self):
@@ -1336,13 +1338,13 @@ class MinIoURandomCrop:
 
 
 @PIPELINES.register_module()
-class MinIoFRandomCrop:
+class MinOverlapRandomCrop:
     """Random crop the image & bboxes, the cropped patches have minimum IoA
     requirement with original image & bboxes, the IoA threshold is randomly
-    selected from min_ioAs.
+    selected from min_ioas.
 
     Args:
-        min_iofs (tuple): minimum IoA threshold for all intersections with
+        min_ratios (tuple): minimum IoA threshold for all intersections with
         bounding boxes
         min_crop_size (float): minimum crop's size (i.e. h,w := a*h, a*w,
         where a >= min_crop_size).
@@ -1356,14 +1358,16 @@ class MinIoFRandomCrop:
     """
 
     def __init__(self,
-                 min_iofs=(0.8, 0.9, 1.0),
+                 min_ratios=(0.8, 0.9),
                  min_crop_size=0.3,
+                 method='ioa',
                  bbox_clip_border=True):
         # 1: return ori img
-        self.min_iofs = min_iofs
-        self.sample_mode = (1, *min_iofs, 0)
+        self.min_ratios = min_ratios
+        self.sample_mode = (1, *min_ratios, 0)
         self.min_crop_size = min_crop_size
         self.bbox_clip_border = bbox_clip_border
+        self.method = method
         self.bbox2label = {
             'gt_bboxes': 'gt_labels',
             'gt_bboxes_ignore': 'gt_labels_ignore'
@@ -1399,7 +1403,7 @@ class MinIoFRandomCrop:
             if mode == 1:
                 return results
 
-            min_iof = mode
+            min_ratio = mode
             for i in range(50):
                 new_w = random.uniform(self.min_crop_size * w, w)
                 new_h = random.uniform(self.min_crop_size * h, h)
@@ -1417,8 +1421,8 @@ class MinIoFRandomCrop:
                 if patch[2] == patch[0] or patch[3] == patch[1]:
                     continue
                 overlaps = bbox_overlaps(
-                    patch.reshape(-1, 4), boxes.reshape(-1, 4), mode='iof').reshape(-1)
-                if len(overlaps) > 0 and overlaps.min() < min_iof:
+                    patch.reshape(-1, 4), boxes.reshape(-1, 4), mode=self.method).reshape(-1)
+                if len(overlaps[overlaps > 0]) > 0 and overlaps[overlaps > 0].min() < min_ratio:
                     continue
 
                 # center of boxes should inside the crop img
@@ -1469,7 +1473,8 @@ class MinIoFRandomCrop:
 
     def __repr__(self):
         repr_str = self.__class__.__name__
-        repr_str += f'(min_iofs={self.min_iofs}, '
+        repr_str += f'(method={self.method}, '
+        repr_str += f'(min_ratios={self.min_ratios}, '
         repr_str += f'min_crop_size={self.min_crop_size}, '
         repr_str += f'bbox_clip_border={self.bbox_clip_border})'
         return repr_str
@@ -1889,8 +1894,8 @@ class RandomCenterCropPad:
         """
         center = (boxes[:, :2] + boxes[:, 2:]) / 2
         mask = (center[:, 0] > patch[0]) * (center[:, 1] > patch[1]) * (
-            center[:, 0] < patch[2]) * (
-                center[:, 1] < patch[3])
+                center[:, 0] < patch[2]) * (
+                       center[:, 1] < patch[3])
         return mask
 
     def _crop_image_and_paste(self, image, center, size):
@@ -1940,7 +1945,7 @@ class RandomCenterCropPad:
             cropped_center_y - top, cropped_center_y + bottom,
             cropped_center_x - left, cropped_center_x + right
         ],
-                          dtype=np.float32)
+            dtype=np.float32)
 
         return cropped_img, border, patch
 
@@ -1994,7 +1999,7 @@ class RandomCenterCropPad:
                         bboxes[:, 0:4:2] = np.clip(bboxes[:, 0:4:2], 0, new_w)
                         bboxes[:, 1:4:2] = np.clip(bboxes[:, 1:4:2], 0, new_h)
                     keep = (bboxes[:, 2] > bboxes[:, 0]) & (
-                        bboxes[:, 3] > bboxes[:, 1])
+                            bboxes[:, 3] > bboxes[:, 1])
                     bboxes = bboxes[keep]
                     results[key] = bboxes
                     if key in ['gt_bboxes']:
