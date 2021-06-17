@@ -682,7 +682,7 @@ class ReinhardNormalize:
         self.std = np.array(std, dtype=np.float32)
         self.clip_range = clip_range
         normalize = normalizer.ReinhardNormalRGB if rgb else normalizer.ReinhardNormalBGR
-        self.normalizer = normalize(mean, std)
+        self.normalizer = normalize((mean, std))
 
     def __call__(self, results):
         for key in results.get('img_fields', ['img']):

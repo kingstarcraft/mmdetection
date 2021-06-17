@@ -4,6 +4,7 @@ import os.path as osp
 import time
 import warnings
 
+from zero.torch import infer
 import mmcv
 import torch
 from mmcv import Config, DictAction
@@ -38,6 +39,12 @@ def parse_args():
         help='Format the output results without perform evaluation. It is'
         'useful when you want to format the result to a specific format and '
         'submit it to the test server')
+    parser.add_argument(
+        '--dect',
+        nargs='+',
+        action=DictAction,
+        help='custom options for dect, the key-value pair in xxx=yyy '
+        'format will be kwargs for infer.mmdect() function')
     parser.add_argument(
         '--eval',
         type=str,
@@ -197,6 +204,7 @@ def main():
     else:
         model.CLASSES = dataset.CLASSES
 
+    model = infer.MMDect(model, **args.dect)
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
         outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
