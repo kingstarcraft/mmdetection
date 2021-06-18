@@ -59,6 +59,7 @@ def parse_args():
         type=float,
         default=0.3,
         help='score threshold (default: 0.3)')
+    parser.add_argument('--gpu', type=int, default=0, help='gpu id')
     parser.add_argument(
         '--gpu-collect',
         action='store_true',
@@ -177,7 +178,8 @@ def main():
     if args.work_dir is not None and rank == 0:
         mmcv.mkdir_or_exist(osp.abspath(args.work_dir))
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-        json_file = osp.join(args.work_dir, f'eval_{timestamp}.json')
+        filestem = os.path.splitext(os.path.split(args.checkpoint)[-1])[0]
+        json_file = osp.join(args.work_dir, f'eval_{filestem}_{timestamp}.json')
 
     # build the dataloader
     dataset = build_dataset(cfg.data.test)
@@ -206,7 +208,7 @@ def main():
 
     model = infer.MMDect(model, **args.dect)
     if not distributed:
-        model = MMDataParallel(model, device_ids=[0])
+        model = MMDataParallel(model, device_ids=[args.gpu])
         outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
                                   args.show_score_thr)
     else:
