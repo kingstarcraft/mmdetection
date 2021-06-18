@@ -111,6 +111,26 @@ def parse_args():
     return args
 
 
+def list_ckpt(inputs):
+    stems = []
+    if os.path.isdir(inputs):
+        for filename in os.listdir(inputs):
+            if filename.startswith('epoch') and filename.endswith('.pth'):
+                try:
+                    epoch = int(filename[6:-4])
+                    stems.append(epoch)
+                except:
+                    raise
+        stems = sorted(stems, reverse=True)
+        root = inputs
+    elif os.path.isfile(inputs):
+        root, filename = os.path.split(inputs)
+        stems = [filename]
+    else:
+        raise IOError(f'can not parse {inputs}')
+    return root, stems
+
+
 def main():
     args = parse_args()
 
@@ -178,8 +198,7 @@ def main():
     if args.work_dir is not None and rank == 0:
         mmcv.mkdir_or_exist(osp.abspath(args.work_dir))
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-        filestem = os.path.splitext(os.path.split(args.checkpoint)[-1])[0]
-        json_file = osp.join(args.work_dir, f'eval_{filestem}_{timestamp}.json')
+        json_file = osp.join(args.work_dir, f'eval_{timestamp}.json')
 
     # build the dataloader
     dataset = build_dataset(cfg.data.test)
@@ -190,57 +209,61 @@ def main():
         dist=distributed,
         shuffle=False)
 
-    # build the model and load checkpoint
-    cfg.model.train_cfg = None
-    model = build_detector(cfg.model, test_cfg=cfg.get('test_cfg'))
-    fp16_cfg = cfg.get('fp16', None)
-    if fp16_cfg is not None:
-        wrap_fp16_model(model)
-    checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
-    if args.fuse_conv_bn:
-        model = fuse_conv_bn(model)
-    # old versions did not save class info in checkpoints, this walkaround is
-    # for backward compatibility
-    if 'CLASSES' in checkpoint.get('meta', {}):
-        model.CLASSES = checkpoint['meta']['CLASSES']
-    else:
-        model.CLASSES = dataset.CLASSES
+    ckpt_root, ckpt_epochs = list_ckpt(args.checkpoint)
+    metric_dicts = {}
+    for epoch in ckpt_epochs:
+        # build the model and load checkpoint
+        cfg.model.train_cfg = None
+        model = build_detector(cfg.model, test_cfg=cfg.get('test_cfg'))
+        fp16_cfg = cfg.get('fp16', None)
+        if fp16_cfg is not None:
+            wrap_fp16_model(model)
+        ckpt_name = f'epoch_{epoch}.pth' if isinstance(epoch, int) else epoch
+        checkpoint = load_checkpoint(model, f'{ckpt_root}/{ckpt_name}', map_location='cpu')
+        if args.fuse_conv_bn:
+            model = fuse_conv_bn(model)
+        # old versions did not save class info in checkpoints, this walkaround is
+        # for backward compatibility
+        if 'CLASSES' in checkpoint.get('meta', {}):
+            model.CLASSES = checkpoint['meta']['CLASSES']
+        else:
+            model.CLASSES = dataset.CLASSES
 
-    model = infer.MMDect(model, **args.dect)
-    if not distributed:
-        model = MMDataParallel(model, device_ids=[args.gpu])
-        outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
-                                  args.show_score_thr)
-    else:
-        model = MMDistributedDataParallel(
-            model.cuda(),
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False)
-        outputs = multi_gpu_test(model, data_loader, args.tmpdir,
-                                 args.gpu_collect)
+        model = infer.MMDect(model, **args.dect)
+        if not distributed:
+            model = MMDataParallel(model, device_ids=[args.gpu])
+            outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
+                                      args.show_score_thr)
+        else:
+            model = MMDistributedDataParallel(
+                model.cuda(),
+                device_ids=[torch.cuda.current_device()],
+                broadcast_buffers=False)
+            outputs = multi_gpu_test(model, data_loader, args.tmpdir,
+                                     args.gpu_collect)
 
-    rank, _ = get_dist_info()
-    if rank == 0:
-        if args.out:
-            print(f'\nwriting results to {args.out}')
-            mmcv.dump(outputs, args.out)
-        kwargs = {} if args.eval_options is None else args.eval_options
-        if args.format_only:
-            dataset.format_results(outputs, **kwargs)
-        if args.eval:
-            eval_kwargs = cfg.get('evaluation', {}).copy()
-            # hard-code way to remove EvalHook args
-            for key in [
-                    'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
-                    'rule'
-            ]:
-                eval_kwargs.pop(key, None)
-            eval_kwargs.update(dict(metric=args.eval, **kwargs))
-            metric = dataset.evaluate(outputs, **eval_kwargs)
-            print(metric)
-            metric_dict = dict(config=args.config, metric=metric)
-            if args.work_dir is not None and rank == 0:
-                mmcv.dump(metric_dict, json_file)
+        rank, _ = get_dist_info()
+        if rank == 0:
+            if args.out:
+                print(f'\nwriting results to {args.out}')
+                mmcv.dump(outputs, args.out)
+            kwargs = {} if args.eval_options is None else args.eval_options
+            if args.format_only:
+                dataset.format_results(outputs, **kwargs)
+            if args.eval:
+                eval_kwargs = cfg.get('evaluation', {}).copy()
+                # hard-code way to remove EvalHook args
+                for key in [
+                        'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
+                        'rule'
+                ]:
+                    eval_kwargs.pop(key, None)
+                eval_kwargs.update(dict(metric=args.eval, **kwargs))
+                metric = dataset.evaluate(outputs, **eval_kwargs)
+                print(metric)
+                metric_dict = dict(config=args.config, metric=metric)
+                metric_dicts[epoch] = metric_dict
+                mmcv.dump(metric_dicts, json_file)
 
 
 if __name__ == '__main__':
