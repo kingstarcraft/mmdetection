@@ -1,3 +1,4 @@
+import sys
 import argparse
 import os
 
@@ -14,6 +15,7 @@ def parse_args():
 
 
 def main():
+    root = sys.path[0].replace('\\', '/')
     args = parse_args()
     stems = []
     for filename in os.listdir(args.ckpt_root):
@@ -25,10 +27,10 @@ def main():
                 raise
     for stem in sorted(stems):
         ckpt = args.ckpt_root + f'/epoch_{stem}.pth'
-        os.system(f'python test.py {args.config} {ckpt} --work-dir {args.output} '
+        os.system(f'python {root}/test.py {args.config} {ckpt} --work-dir {args.output} '
                   f'--gpu {args.gpu} '
                   f'--eval bbox --eval-options classwise=True '
-                  f'--dect threshold=0.9 size=(1024,1024) overlap=100')
+                  f'--dect threshold=0.9 size=1024,1024 overlap=100')
 
 
 if __name__ == '__main__':
