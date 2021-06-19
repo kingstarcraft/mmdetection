@@ -14,7 +14,7 @@ class EvalHook(BaseEvalHook):
             return
 
         from mmdet.apis import single_gpu_test
-        model = runner.model if self.model is None else self.model(self.model)
+        model = runner.model if self.model is None else self.model(runner.model)
         results = single_gpu_test(model, self.dataloader, show=False)
         runner.log_buffer.output['eval_iter_num'] = len(self.dataloader)
         key_score = self.evaluate(runner, results)
@@ -47,7 +47,7 @@ class DistEvalHook(BaseDistEvalHook):
             tmpdir = osp.join(runner.work_dir, '.eval_hook')
 
         from mmdet.apis import multi_gpu_test
-        model = runner.model if self.model is None else self.model(self.model)
+        model = runner.model if self.model is None else self.model(runner.model)
         results = multi_gpu_test(
             model,
             self.dataloader,
