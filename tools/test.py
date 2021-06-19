@@ -4,7 +4,7 @@ import os.path as osp
 import time
 import warnings
 
-from zero.torch import infer
+from zero.torch import detection
 import mmcv
 import torch
 from mmcv import Config, DictAction
@@ -230,7 +230,7 @@ def main():
             else:
                 model.CLASSES = dataset.CLASSES
 
-            model = infer.MMDect(model, **args.dect)
+            model = detection.SlidingWindow(model, **args.dect)
             if not distributed:
                 model = MMDataParallel(model, device_ids=[args.gpu])
                 outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
