@@ -962,7 +962,7 @@ class NormalizeDistortion:
 
 @PIPELINES.register_module()
 class ReinhardDistortion:
-    def __init__(self, mean_range, std_range, rgb=True, clip_range=(0, 255)):
+    def __init__(self, mean_range, std_range, offset=0.5, rgb=True, clip_range=(0, 255)):
         mean_range = np.array(mean_range)
         std_range = np.array(std_range)
         assert 1 <= mean_range.ndim <= 2
@@ -970,8 +970,8 @@ class ReinhardDistortion:
 
         self.mean_range = mean_range if mean_range.shape[0] == 2 else mean_range.T
         self.std_range = std_range if std_range.shape[0] == 2 else std_range.T
-        self.std_diff = np.abs(self.mean_range[-1] - self.mean_range[0]) / 2
-        self.mean_diff = np.abs(self.std_range[-1] - self.std_range[0]) / 2
+        self.std_diff = np.abs(self.mean_range[-1] - self.mean_range[0]) * offset
+        self.mean_diff = np.abs(self.std_range[-1] - self.std_range[0]) * offset
         self.clip_range = clip_range
         self.normalizer = normalizer.ReinhardNormalRGB() if rgb else normalizer.ReinhardNormalBGR()
 
@@ -1441,7 +1441,7 @@ class MinOverlapRandomCrop:
                         boxes = results[key].copy()
                         mask = is_center_of_bboxes_in_patch(boxes, patch)
                         boxes = boxes[mask]
-                        if self.bbox_clip_border and mask.any():
+                        if self.bbox_clip_border:
                             boxes[:, 2:] = boxes[:, 2:].clip(max=patch[2:])
                             boxes[:, :2] = boxes[:, :2].clip(min=patch[:2])
                         boxes -= np.tile(patch[:2], 2)
