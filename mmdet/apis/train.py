@@ -3,6 +3,9 @@ import warnings
 
 import numpy as np
 import torch
+
+from zero.torch import detection
+
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import (HOOKS, DistSamplerSeedHook, EpochBasedRunner,
                          Fp16OptimizerHook, OptimizerHook, build_optimizer,
@@ -146,8 +149,10 @@ def train_detector(model,
             shuffle=False)
         eval_cfg = cfg.get('evaluation', {})
         eval_cfg['by_epoch'] = cfg.runner['type'] != 'IterBasedRunner'
+        sliding_window = cfg.get('sliding_window', None)
+        model_func = None if sliding_window is None else lambda inputs: detection.SlidingWindow(inputs, **model_func)
         eval_hook = DistEvalHook if distributed else EvalHook
-        runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
+        runner.register_hook(eval_hook(val_dataloader,  **eval_cfg))
 
     # user-defined hooks
     if cfg.get('custom_hooks', None):
