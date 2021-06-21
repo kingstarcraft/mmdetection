@@ -4,7 +4,8 @@ import inspect
 import mmcv
 import numpy as np
 from numpy import random
-from zero.image import normalizer
+import torch
+from zero.torch.data import normalizer
 
 from mmdet.core import PolygonMasks
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
@@ -686,8 +687,9 @@ class ReinhardNormalize:
 
     def __call__(self, results):
         for key in results.get('img_fields', ['img']):
-            reinhard = self.normalizer(results[key])
-            results[key] = reinhard if self.clip_range is None else np.clip(reinhard, *self.clip_range)
+            reinhard = self.normalizer(torch.Tensor(results[key]))
+            reinhard = reinhard if self.clip_range is None else torch.clip(reinhard, *self.clip_range)
+            results[key] = reinhard.cpu().numpy()
         return results
 
     def __repr__(self):
@@ -974,15 +976,21 @@ class ReinhardDistortion:
         self.mean_diff = np.abs(self.std_range[-1] - self.std_range[0]) * offset
         self.clip_range = clip_range
         self.normalizer = normalizer.ReinhardNormalRGB() if rgb else normalizer.ReinhardNormalBGR()
+        self.normalizer = self.normalizer
 
     def __call__(self, results):
-        mean = np.random.uniform(self.mean_range[0], self.mean_range[-1])
-        std = np.random.uniform(self.std_range[0], self.std_range[-1])
-        mean_offset = np.random.uniform(-self.mean_diff, self.mean_diff)
-        std_offset = np.random.uniform(-self.std_diff, self.std_diff)
+        mean = torch.Tensor(np.random.uniform(self.mean_range[0], self.mean_range[-1]))
+        std = torch.Tensor(np.random.uniform(self.std_range[0], self.std_range[-1]))
+        mean_offset = torch.Tensor(np.random.uniform(-self.mean_diff, self.mean_diff))
+        std_offset = torch.Tensor(np.random.uniform(-self.std_diff, self.std_diff))
         for key in results.get('img_fields', ['img']):
-            reinhard = self.normalizer(results[key], (mean, std), offset=(mean_offset, std_offset))
-            results[key] = reinhard if self.clip_range is None else np.clip(reinhard, *self.clip_range)
+            reinhard = self.normalizer(
+                torch.Tensor(results[key]),
+                (mean, std),
+                offset=(mean_offset, std_offset)
+            )
+            reinhard if self.clip_range is None else torch.clip(reinhard, *self.clip_range)
+            results[key] = reinhard.numpy()
         return results
 
     def __repr__(self):
