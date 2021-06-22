@@ -1,11 +1,11 @@
 import copy
 import inspect
 
+import cv2
 import mmcv
 import numpy as np
 from numpy import random
-import torch
-from zero.torch.data import normalizer
+from zero.image import normalizer
 
 from mmdet.core import PolygonMasks
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
@@ -687,9 +687,8 @@ class ReinhardNormalize:
 
     def __call__(self, results):
         for key in results.get('img_fields', ['img']):
-            reinhard = self.normalizer(torch.Tensor(results[key]))
-            reinhard = reinhard if self.clip_range is None else torch.clip(reinhard, *self.clip_range)
-            results[key] = reinhard.cpu().numpy()
+            reinhard = self.normalizer(results[key])
+            results[key] = reinhard if self.clip_range is None else np.clip(reinhard, *self.clip_range)
         return results
 
     def __repr__(self):
@@ -964,7 +963,7 @@ class NormalizeDistortion:
 
 @PIPELINES.register_module()
 class ReinhardDistortion:
-    def __init__(self, mean_range, std_range, offset=0.5, rgb=True, clip_range=(0, 255)):
+    def __init__(self, mean_range, std_range, ratio=0.5, offset=0.5, threshold=0.5, rgb=True, clip_range=(0, 255)):
         mean_range = np.array(mean_range)
         std_range = np.array(std_range)
         assert 1 <= mean_range.ndim <= 2
@@ -977,20 +976,29 @@ class ReinhardDistortion:
         self.clip_range = clip_range
         self.normalizer = normalizer.ReinhardNormalRGB() if rgb else normalizer.ReinhardNormalBGR()
         self.normalizer = self.normalizer
+        self.ratio = ratio
+        self.threshold = threshold
 
     def __call__(self, results):
-        mean = torch.Tensor(np.random.uniform(self.mean_range[0], self.mean_range[-1]))
-        std = torch.Tensor(np.random.uniform(self.std_range[0], self.std_range[-1]))
-        mean_offset = torch.Tensor(np.random.uniform(-self.mean_diff, self.mean_diff))
-        std_offset = torch.Tensor(np.random.uniform(-self.std_diff, self.std_diff))
-        for key in results.get('img_fields', ['img']):
-            reinhard = self.normalizer(
-                torch.Tensor(results[key]),
-                (mean, std),
-                offset=(mean_offset, std_offset)
-            )
-            reinhard if self.clip_range is None else torch.clip(reinhard, *self.clip_range)
-            results[key] = reinhard.numpy()
+        img_info = results.get('img_info', {})
+        src = np.array(img_info['lab'][0]), np.array(img_info['lab'][1]) if 'lab' in img_info else None
+        switch = np.random.uniform(0, 1) < self.ratio
+        while switch:
+            dst = (np.random.uniform(self.mean_range[0], self.mean_range[-1]),
+                   np.random.uniform(self.std_range[0], self.std_range[-1]))
+            offset = (np.random.uniform(-self.mean_diff, self.mean_diff),
+                      np.random.uniform(-self.std_diff, self.std_diff))
+            ratio = 0
+            for key in results.get('img_fields', ['img']):
+                reinhard = self.normalizer(results[key], dst, src, offset)
+                mask = np.logical_or(reinhard < self.clip_range[0], reinhard > self.clip_range[1])
+                ratio = max(mask.sum()/mask.nbytes, ratio)
+                results[key] = np.clip(reinhard, *self.clip_range)
+            if ratio < self.ratio:
+                break
+                # cv2.imshow(f'{ratio}', np.clip(outputs['img'], *self.clip_range).astype('uint8').copy())
+                # cv2.waitKey()
+                # cv2.destroyAllWindows()
         return results
 
     def __repr__(self):
@@ -1001,9 +1009,11 @@ class ReinhardDistortion:
         repr_str += 'std_range='
         repr_str += f'({self.std_range[0][0]},{self.std_range[0][1]},{self.std_range[0][2]})==>'
         repr_str += f'({self.std_range[1][0]},{self.std_range[1][1]},{self.std_range[1][2]})\n'
-        repr_str += f'rgb={isinstance(self.normalizer, normalizer.ReinhardNormalRGB)}\n'
         repr_str += 'clip_range='
-        repr_str += 'None' if self.clip_range is None else f'{self.clip_range[0]}==>{self.clip_range[1]})'
+        repr_str += 'None' if self.clip_range is None else f'{self.clip_range[0]}==>{self.clip_range[1]})\n'
+        repr_str += f'rgb={isinstance(self.normalizer, normalizer.ReinhardNormalRGB)}, '
+        repr_str += f'ratio={self.ratio}, '
+        repr_str += f'threshold={self.threshold}, '
         return repr_str
 
 
