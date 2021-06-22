@@ -1,6 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
 
+import zero
 import mmcv
 import numpy as np
 import torch
@@ -143,6 +144,35 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             # proposals.
             if 'proposals' in kwargs:
                 kwargs['proposals'] = kwargs['proposals'][0]
+            if 'sliding_window' in self.init_cfg:
+                sliding_window = self.init_cfg['sliding_window']
+                size = np.array(sliding_window['size'])
+                step = np.array(sliding_window['step']) if 'step' in sliding_window else size
+                threshold = sliding_window['threshold'] if 'threshold' in sliding_window else 1
+                patches = zero.matrix.crop(imgs[0], size, size-step, start=-2, end=None)
+                result = None
+                format_tuple = False
+                for (y, x), patch in patches:
+                    src = self.simple_test(patch, img_metas[0], **kwargs)[0]
+                    box = np.array([x, y, x, y, 0])
+                    dst = [(s+box) if s.shape[-1] == 5 else s for s in src]
+                    if result is None:
+                        result = dst
+                    elif isinstance(src, np.ndarray):
+                        result = np.concatenate([result, src])
+                    else:
+                        assert len(result) == len(dst)
+                        result = [np.concatenate((result[i], dst[i])) for i in range(len(src))]
+                        format_tuple = isinstance(src, tuple)
+                if isinstance(result, np.ndarray) and result.shape[-1] == 5:
+                    result = zero.box.filter_box(result, threshold)
+                else:
+                    for i in range(len(result)):
+                        if result[i].shape[-1] == 5:
+                            result[i] = zero.box.filter_box(result[i])
+                result = tuple(result) if format_tuple else result
+                return [result]
+
             return self.simple_test(imgs[0], img_metas[0], **kwargs)
         else:
             assert imgs[0].size(0) == 1, 'aug test does not support ' \

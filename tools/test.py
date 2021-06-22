@@ -40,12 +40,6 @@ def parse_args():
         'useful when you want to format the result to a specific format and '
         'submit it to the test server')
     parser.add_argument(
-        '--dect',
-        nargs='+',
-        action=DictAction,
-        help='custom options for dect, the key-value pair in xxx=yyy '
-        'format will be kwargs for infer.mmdect() function')
-    parser.add_argument(
         '--eval',
         type=str,
         nargs='+',
@@ -233,7 +227,6 @@ def main():
         else:
             model.CLASSES = dataset.CLASSES
 
-        model = detection.SlidingWindow(model, **args.dect)
         if not distributed:
             model = MMDataParallel(model, device_ids=[args.gpu])
             outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
