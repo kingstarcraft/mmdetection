@@ -15,6 +15,7 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
     """Base class for detectors."""
 
     def __init__(self, init_cfg=None):
+        self.sliding_window = init_cfg.pop('sliding_window') if 'sliding_window' in init_cfg else None
         super(BaseDetector, self).__init__(init_cfg)
         self.fp16_enabled = False
 
@@ -144,11 +145,10 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             # proposals.
             if 'proposals' in kwargs:
                 kwargs['proposals'] = kwargs['proposals'][0]
-            if 'sliding_window' in self.init_cfg:
-                sliding_window = self.init_cfg['sliding_window']
-                size = np.array(sliding_window['size'])
-                step = np.array(sliding_window['step']) if 'step' in sliding_window else size
-                threshold = sliding_window['threshold'] if 'threshold' in sliding_window else 1
+            if self.sliding_window is not None:
+                size = np.array(self.sliding_window['size'])
+                step = np.array(self.sliding_window['step']) if 'step' in self.sliding_window else size
+                threshold = self.sliding_window['threshold'] if 'threshold' in self.sliding_window else 1
                 patches = zero.matrix.crop(imgs[0], size, size-step, start=-2, end=None)
                 result = None
                 format_tuple = False
