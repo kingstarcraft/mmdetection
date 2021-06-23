@@ -15,7 +15,9 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
     """Base class for detectors."""
 
     def __init__(self, init_cfg=None):
-        self.sliding_window = init_cfg.pop('sliding_window') if 'sliding_window' in init_cfg else None
+        self.sliding_window = None
+        if init_cfg is not None and 'sliding_window' in init_cfg:
+            self.sliding_window = init_cfg.pop('sliding_window')
         super(BaseDetector, self).__init__(init_cfg)
         self.fp16_enabled = False
 
