@@ -15,9 +15,16 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
     """Base class for detectors."""
 
     def __init__(self, init_cfg=None):
-        self.sliding_window = None
-        if init_cfg is not None and 'sliding_window' in init_cfg:
-            self.sliding_window = init_cfg.pop('sliding_window')
+        if init_cfg is not None:
+            if 'sliding_window' in init_cfg:
+                self.sliding_window = init_cfg.pop('sliding_window')
+            elif isinstance(init_cfg, list):
+                for cfg in init_cfg:
+                    if cfg['type'] == 'SlidingWindow':
+                        init_cfg.remove(cfg)
+                        cfg.pop('type')
+                        self.sliding_window = cfg
+
         super(BaseDetector, self).__init__(init_cfg)
         self.fp16_enabled = False
 
@@ -147,7 +154,7 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             # proposals.
             if 'proposals' in kwargs:
                 kwargs['proposals'] = kwargs['proposals'][0]
-            if self.sliding_window is not None:
+            if self.with_sliding_window:
                 size = np.array(self.sliding_window['size'])
                 step = np.array(self.sliding_window['step']) if 'step' in self.sliding_window else size
                 threshold = self.sliding_window['threshold'] if 'threshold' in self.sliding_window else 1
