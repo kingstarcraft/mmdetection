@@ -29,6 +29,10 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
         self.fp16_enabled = False
 
     @property
+    def with_sliding_window(self):
+        return hasattr(self, 'sliding_window') and self.sliding_window is not None
+
+    @property
     def with_neck(self):
         """bool: whether the detector has a neck"""
         return hasattr(self, 'neck') and self.neck is not None
