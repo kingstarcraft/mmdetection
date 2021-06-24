@@ -66,6 +66,7 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
         self.sampling = loss_cls['type'] not in [
             'FocalLoss', 'GHMC', 'QualityFocalLoss'
         ]
+        self.use_all_sample = loss_cls['type'] == 'FocalLoss'
         if self.use_sigmoid_cls:
             self.cls_out_channels = num_classes
         else:
@@ -465,7 +466,7 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
         (labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
          num_total_pos, num_total_neg) = cls_reg_targets
         num_total_samples = (
-            num_total_pos + num_total_neg if self.sampling else num_total_pos)
+            num_total_pos + num_total_neg if (self.sampling or self.use_all_sample) else num_total_pos)
 
         # anchor number of multi levels
         num_level_anchors = [anchors.size(0) for anchors in anchor_list[0]]
