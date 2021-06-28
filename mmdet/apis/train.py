@@ -164,10 +164,8 @@ def train_detector(model,
             shuffle=False)
         eval_cfg = cfg.get('evaluation', {})
         eval_cfg['by_epoch'] = cfg.runner['type'] != 'IterBasedRunner'
-        sliding_window = cfg.get('sliding_window', None)
-        model_func = None if sliding_window is None else lambda inputs: detection.SlidingWindow(inputs, **sliding_window)
         eval_hook = DistEvalHook if distributed else EvalHook
-        runner.register_hook(eval_hook(val_dataloader, model_func, **eval_cfg))
+        runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
 
     # user-defined hooks
     if cfg.get('custom_hooks', None):
