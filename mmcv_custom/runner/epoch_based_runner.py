@@ -13,7 +13,8 @@ from .checkpoint import save_checkpoint
 try:
     import apex
 except:
-    print('apex is not installed')
+    pass
+    # print('apex is not installed')
 
 
 @RUNNERS.register_module()
