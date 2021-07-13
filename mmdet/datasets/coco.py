@@ -366,7 +366,8 @@ class CocoDataset(CustomDataset):
                  classwise=False,
                  proposal_nums=(100, 300, 1000),
                  iou_thrs=None,
-                 metric_items=None):
+                 metric_items=None,
+                 exclute_cat=None):
         """Evaluation in COCO protocol.
 
         Args:
@@ -393,6 +394,8 @@ class CocoDataset(CustomDataset):
                 used when ``metric=='proposal'``, ``['mAP', 'mAP_50', 'mAP_75',
                 'mAP_s', 'mAP_m', 'mAP_l']`` will be used when
                 ``metric=='bbox' or metric=='segm'``.
+            exclute_cat (list[int|str] | int|str, optional): category not will not
+                be use to calculate mAP.
 
         Returns:
             dict[str, float]: COCO style evaluation metric.
@@ -409,6 +412,13 @@ class CocoDataset(CustomDataset):
         if metric_items is not None:
             if not isinstance(metric_items, list):
                 metric_items = [metric_items]
+        cat_ids = self.cat_ids
+        if exclute_cat is not None:
+            if not isinstance(exclute_cat, (list, tuple)):
+                exclute_cat = [exclute_cat]
+            exclute_cat = [self.coco.get_cat_ids(cat_names=[cat])[0]
+                           if isinstance(cat, str) else cat for cat in exclute_cat]
+            cat_ids = list(filter(lambda item: item not in exclute_cat, cat_ids))
 
         result_files, tmp_dir = self.format_results(results, jsonfile_prefix)
 
@@ -460,7 +470,7 @@ class CocoDataset(CustomDataset):
                 break
 
             cocoEval = COCOeval(cocoGt, cocoDt, iou_type)
-            cocoEval.params.catIds = self.cat_ids
+            cocoEval.params.catIds = cat_ids
             cocoEval.params.imgIds = self.img_ids
             cocoEval.params.maxDets = list(proposal_nums)
             cocoEval.params.iouThrs = iou_thrs
@@ -509,10 +519,10 @@ class CocoDataset(CustomDataset):
                     # from https://github.com/facebookresearch/detectron2/
                     precisions = cocoEval.eval['precision']
                     # precision: (iou, recall, cls, area range, max dets)
-                    assert len(self.cat_ids) == precisions.shape[2]
+                    assert len(cat_ids) == precisions.shape[2]
 
                     results_per_category = []
-                    for idx, catId in enumerate(self.cat_ids):
+                    for idx, catId in enumerate(cat_ids):
                         # area range index 0: all area ranges
                         # max dets index -1: typically 100 per image
                         nm = self.coco.loadCats(catId)[0]
