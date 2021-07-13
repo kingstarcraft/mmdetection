@@ -963,7 +963,7 @@ class NormalizeDistortion:
 
 @PIPELINES.register_module()
 class ReinhardDistortion:
-    def __init__(self, mean_range, std_range, ratio=0.5, offset=0.2, threshold=0.5, rgb=True, clip_range=(0, 255)):
+    def __init__(self, mean_range, std_range, ratio=0.2, offset=0.5, threshold=0.5, rgb=True, clip_range=(0, 255)):
         mean_range = np.array(mean_range)
         std_range = np.array(std_range)
         assert 1 <= mean_range.ndim <= 2
