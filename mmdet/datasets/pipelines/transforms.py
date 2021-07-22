@@ -1420,6 +1420,8 @@ class MinOverlapRandomCrop:
         boxes = [results[key] for key in results['bbox_fields']]
         boxes = np.concatenate(boxes, 0)
         h, w, c = img.shape
+
+        time = len(self.sample_mode) * 5
         while True:
             mode = random.choice(self.sample_mode)
             self.mode = mode
@@ -1442,7 +1444,7 @@ class MinOverlapRandomCrop:
                     continue
                 overlaps = bbox_overlaps(
                     patch.reshape(-1, 4), boxes.reshape(-1, 4), mode=self.method).reshape(-1)
-                if len(overlaps[overlaps > 0]) > 0 and overlaps[overlaps > 0].min() < min_ratio:
+                if len(overlaps[overlaps > 0]) > 0 and overlaps[overlaps > 0].min() < min_ratio and time > 0:
                     continue
 
                 # center of boxes should inside the crop img
@@ -1490,6 +1492,7 @@ class MinOverlapRandomCrop:
                     results[key] = results[key][patch[1]:patch[3],
                                    patch[0]:patch[2]]
                 return results
+            time -= 1
 
     def __repr__(self):
         repr_str = self.__class__.__name__
