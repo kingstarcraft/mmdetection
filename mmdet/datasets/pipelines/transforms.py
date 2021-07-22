@@ -984,21 +984,26 @@ class ReinhardDistortion:
         src = np.array(img_info['lab'][0]), np.array(img_info['lab'][1]) if 'lab' in img_info else None
         switch = np.random.uniform(0, 1) < self.ratio
         while switch:
-            dst = (np.random.uniform(self.mean_range[0], self.mean_range[-1]),
-                   np.random.uniform(self.std_range[0], self.std_range[-1]))
-            offset = (np.random.uniform(-self.mean_diff, self.mean_diff),
-                      np.random.uniform(-self.std_diff, self.std_diff))
-            ratio = 0
-            for key in results.get('img_fields', ['img']):
-                reinhard = self.normalizer(results[key], dst, src, offset)
-                mask = np.logical_or(reinhard < self.clip_range[0], reinhard > self.clip_range[1])
-                ratio = max(mask.sum()/mask.nbytes, ratio)
-                results[key] = np.clip(reinhard, *self.clip_range)
-            if ratio < self.ratio:
-                break
-                # cv2.imshow(f'{ratio}', np.clip(outputs['img'], *self.clip_range).astype('uint8').copy())
-                # cv2.waitKey()
-                # cv2.destroyAllWindows()
+            for i in range(50):
+                dst = (np.random.uniform(self.mean_range[0], self.mean_range[-1]),
+                       np.random.uniform(self.std_range[0], self.std_range[-1]))
+                offset = (np.random.uniform(-self.mean_diff, self.mean_diff),
+                          np.random.uniform(-self.std_diff, self.std_diff))
+                ratio = 0
+                data = {}
+                for key in results.get('img_fields', ['img']):
+                    reinhard = self.normalizer(results[key], dst, src, offset)
+                    mask = np.logical_or(reinhard < self.clip_range[0], reinhard > self.clip_range[1])
+                    ratio = max(mask.sum() / mask.nbytes, ratio)
+                    data[key] = np.clip(reinhard, *self.clip_range)
+                    if ratio > self.ratio:
+                        data = None
+                        break
+                if data:
+                    for key in data:
+                        results[key] = data[key]
+                    return results
+            break
         return results
 
     def __repr__(self):
