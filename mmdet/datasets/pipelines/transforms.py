@@ -1,7 +1,7 @@
 import copy
 import inspect
 
-import cv2
+import sklearn.mixture
 import mmcv
 import numpy as np
 from numpy import random
@@ -963,7 +963,8 @@ class NormalizeDistortion:
 
 @PIPELINES.register_module()
 class ReinhardDistortion:
-    def __init__(self, mean_range, std_range, ratio=0.2, offset=0.5, threshold=0.5, rgb=True, clip_range=(0, 255)):
+    def __init__(self, mean_range, std_range,
+                 offset=0.5, threshold=0.2, probability=0.5, rgb=True, clip_range=(0, 255)):
         mean_range = np.array(mean_range)
         std_range = np.array(std_range)
         assert 1 <= mean_range.ndim <= 2
@@ -973,35 +974,30 @@ class ReinhardDistortion:
         self.std_range = std_range if std_range.shape[0] == 2 else std_range.T
         self.std_diff = np.abs(self.mean_range[-1] - self.mean_range[0]) * offset
         self.mean_diff = np.abs(self.std_range[-1] - self.std_range[0]) * offset
-        self.clip_range = clip_range
-        self.normalizer = normalizer.ReinhardNormalRGB() if rgb else normalizer.ReinhardNormalBGR()
-        self.normalizer = self.normalizer
-        self.ratio = ratio
         self.threshold = threshold
+        self.probability = probability
+        self.normalizer = normalizer.ReinhardNormalRGB() if rgb else normalizer.ReinhardNormalBGR()
+        self.clip_range = clip_range
 
     def __call__(self, results):
         img_info = results.get('img_info', {})
         src = np.array(img_info['lab'][0]), np.array(img_info['lab'][1]) if 'lab' in img_info else None
-        switch = np.random.uniform(0, 1) < self.ratio
+        switch = np.random.uniform(0, 1) < self.probability
         while switch:
             for i in range(50):
                 dst = (np.random.uniform(self.mean_range[0], self.mean_range[-1]),
                        np.random.uniform(self.std_range[0], self.std_range[-1]))
                 offset = (np.random.uniform(-self.mean_diff, self.mean_diff),
                           np.random.uniform(-self.std_diff, self.std_diff))
-                ratio = 0
+                threshold = 0
                 data = {}
                 for key in results.get('img_fields', ['img']):
                     reinhard = self.normalizer(results[key], dst, src, offset)
                     mask = np.logical_or(reinhard < self.clip_range[0], reinhard > self.clip_range[1])
-                    ratio = max(mask.sum() / mask.nbytes, ratio)
+                    threshold = max(mask.sum() / mask.nbytes, threshold)
                     data[key] = np.clip(reinhard, *self.clip_range)
-                    if ratio > self.ratio:
-                        data = None
-                        break
-                if data:
-                    for key in data:
-                        results[key] = data[key]
+                if threshold < self.threshold:
+                    results.update(data)
                     return results
             break
         return results
@@ -1009,16 +1005,71 @@ class ReinhardDistortion:
     def __repr__(self):
         repr_str = self.__class__.__name__
         repr_str += '\n(mean_range='
-        repr_str += f'({self.mean_range[0][0]},{self.mean_range[0][1]},{self.mean_range[0][2]})==>'
-        repr_str += f'({self.mean_range[1][0]},{self.mean_range[1][1]},{self.mean_range[1][2]})\n'
+        repr_str += f'[{self.mean_range[0][0]},{self.mean_range[0][1]},{self.mean_range[0][2]}]==>'
+        repr_str += f'[{self.mean_range[1][0]},{self.mean_range[1][1]},{self.mean_range[1][2]}]\n'
         repr_str += 'std_range='
-        repr_str += f'({self.std_range[0][0]},{self.std_range[0][1]},{self.std_range[0][2]})==>'
-        repr_str += f'({self.std_range[1][0]},{self.std_range[1][1]},{self.std_range[1][2]})\n'
+        repr_str += f'[{self.std_range[0][0]},{self.std_range[0][1]},{self.std_range[0][2]}]==>'
+        repr_str += f'[{self.std_range[1][0]},{self.std_range[1][1]},{self.std_range[1][2]}]\n'
         repr_str += 'clip_range='
-        repr_str += 'None' if self.clip_range is None else f'{self.clip_range[0]}==>{self.clip_range[1]})\n'
+        repr_str += 'None, ' if self.clip_range is None else f'{list(self.clip_range)}, '
         repr_str += f'rgb={isinstance(self.normalizer, normalizer.ReinhardNormalRGB)}, '
-        repr_str += f'ratio={self.ratio}, '
-        repr_str += f'threshold={self.threshold}, '
+        repr_str += f'probability={self.probability}, '
+        repr_str += f'offset={self.offset}, '
+        repr_str += f'threshold={self.threshold})\n'
+        return repr_str
+
+
+@PIPELINES.register_module()
+class VahadaneDistortion:
+    def __init__(self, weight, mean, covariance, threshold=0.01, probability=0.5, rgb=True, clip_range=(0, 255)):
+        model = sklearn.mixture.GaussianMixture(len(mean), covariance_type='full')
+        model.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(covariance))
+        model.means_ = np.array(mean)
+        model.weights_ = np.array(weight)
+        model.covariances_ = np.array(covariance)
+        self.model = model
+        self.threshold = threshold
+        self.probability = probability
+        self.normalizer = normalizer.VahadaneNormalRGB() if rgb else normalizer.VahadaneNormalBGR()
+        self.clip_range = clip_range
+
+    def __call__(self, results):
+        img_info = results.get('img_info', {})
+        switch = np.random.uniform(0, 1) < self.probability
+        while switch:
+            if 'vahadane' in img_info:
+                brightness = np.random.choice(list(img_info['vahadane'].keys()))
+                src = np.array(img_info['vahadane'][brightness])
+                brightness = int(brightness)
+            else:
+                brightness = 90
+                src = None
+            for i in range(50):
+                dst = self.model.sample()[0].reshape([-1, 3])
+                threshold = 0
+                data = {}
+                for key in results.get('img_fields', ['img']):
+                    vahadane = self.normalizer(results[key], dst=dst, src=src, brightness=brightness)
+                    mask = np.logical_or(vahadane < self.clip_range[0], vahadane > self.clip_range[1])
+                    threshold = max(mask.sum() / mask.nbytes, threshold)
+                    data[key] = np.clip(vahadane, *self.clip_range)
+                if threshold < self.threshold:
+                    results.update(data)
+                    return results
+            break
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'\n(weight={self.model.weights_.reshape([-1])}' \
+                    f'\nmean={self.model.means_.reshape([-1])}' \
+                    f'\ncovariance={self.model.covariances_.reshape([-1])}'
+        repr_str += '\nclip_range='
+        repr_str += 'None' if self.clip_range is None else f'{list(self.clip_range)}'
+        repr_str += f', rgb={isinstance(self.normalizer, normalizer.VahadaneNormalRGB)}, '
+        repr_str += f'probability={self.probability}, '
+        repr_str += f'offset={self.offset}, '
+        repr_str += f'threshold={self.threshold})\n'
         return repr_str
 
 
