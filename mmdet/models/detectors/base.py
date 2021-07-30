@@ -162,6 +162,7 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
                 size = np.array(self.sliding_window['size'])
                 step = np.array(self.sliding_window['step']) if 'step' in self.sliding_window else size
                 threshold = self.sliding_window['threshold'] if 'threshold' in self.sliding_window else 1
+                filter = zero.boxes.Filter(threshold=threshold)
                 patches = zero.matrix.crop(imgs[0], size, size-step, start=-2, end=None)
                 result = None
                 format_tuple = False
@@ -178,11 +179,11 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
                         result = [np.concatenate((result[i], dst[i])) for i in range(len(src))]
                         format_tuple = isinstance(src, tuple)
                 if isinstance(result, np.ndarray) and result.shape[-1] == 5:
-                    result = zero.box.filter_box(result, threshold)
+                    result = filter(result)
                 else:
                     for i in range(len(result)):
                         if result[i].shape[-1] == 5:
-                            result[i] = zero.box.filter_box(result[i])
+                            result[i] = filter(result[i])
                 result = tuple(result) if format_tuple else result
                 return [result]
 
