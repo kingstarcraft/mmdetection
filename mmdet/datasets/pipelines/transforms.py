@@ -1,5 +1,6 @@
 import copy
 import inspect
+import json
 
 import sklearn.mixture
 import mmcv
@@ -1021,17 +1022,29 @@ class ReinhardDistortion:
 
 @PIPELINES.register_module()
 class VahadaneDistortion:
-    def __init__(self, weight, mean, covariance, threshold=0.01, probability=0.5, rgb=True, clip_range=(0, 255)):
-        model = sklearn.mixture.GaussianMixture(len(mean), covariance_type='full')
-        model.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(covariance))
-        model.means_ = np.array(mean)
-        model.weights_ = np.array(weight)
-        model.covariances_ = np.array(covariance)
-        self.model = model
+    def __init__(self, sample, threshold=0.01, probability=0.5, rgb=True, clip_range=(0, 255)):
+        if isinstance(sample, str):
+            sample = json.load(open(sample))
+        if isinstance(sample, dict):
+            self.sampler = sklearn.mixture.GaussianMixture(len(sample['mean']), covariance_type='full')
+            self.sampler.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(sample['covariance']))
+            self.sampler.means_ = np.array(sample['mean'])
+            self.sampler.weights_ = np.array(sample['weight'])
+            self.sampler.covariances_ = np.array(sample['covariance'])
+        elif isinstance(sample, list):
+            self.sampler = [np.array(_) for _ in sample]
+        else:
+            raise NotImplementedError
         self.threshold = threshold
         self.probability = probability
         self.normalizer = normalizer.VahadaneNormalRGB() if rgb else normalizer.VahadaneNormalBGR()
         self.clip_range = clip_range
+
+    def sample(self):
+        if isinstance(self.sampler, list):
+            return self.sampler[np.random.randint(0, len(self.sampler))]
+        else:
+            return self.sampler.sample()[0].reshape([-1, 3])
 
     def __call__(self, results):
         img_info = results.get('img_info', {})
@@ -1045,7 +1058,7 @@ class VahadaneDistortion:
                 brightness = 90
                 src = None
             for i in range(50):
-                dst = self.model.sample()[0].reshape([-1, 3])
+                dst = self.sample()
                 threshold = 0
                 data = {}
                 for key in results.get('img_fields', ['img']):
@@ -1061,9 +1074,6 @@ class VahadaneDistortion:
 
     def __repr__(self):
         repr_str = self.__class__.__name__
-        repr_str += f'\n(weight={self.model.weights_.reshape([-1])}' \
-                    f'\nmean={self.model.means_.reshape([-1])}' \
-                    f'\ncovariance={self.model.covariances_.reshape([-1])}'
         repr_str += '\nclip_range='
         repr_str += 'None' if self.clip_range is None else f'{list(self.clip_range)}'
         repr_str += f', rgb={isinstance(self.normalizer, normalizer.VahadaneNormalRGB)}, '
