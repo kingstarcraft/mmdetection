@@ -2,6 +2,7 @@ import copy
 import inspect
 import json
 
+import cv2
 import sklearn.mixture
 import mmcv
 import numpy as np
@@ -1037,8 +1038,9 @@ class VahadaneDistortion:
             raise NotImplementedError
         self.threshold = threshold
         self.probability = probability
-        self.normalizer = normalizer.VahadaneNormalRGB() if rgb else normalizer.VahadaneNormalBGR()
+        self.normalizer = normalizer.VahadaneNormalRGB() #if rgb else normalizer.VahadaneNormalBGR()
         self.clip_range = clip_range
+        self.rgb = rgb
 
     def sample(self):
         if isinstance(self.sampler, list):
@@ -1062,10 +1064,12 @@ class VahadaneDistortion:
                 threshold = 0
                 data = {}
                 for key in results.get('img_fields', ['img']):
-                    vahadane = self.normalizer(results[key], dst=dst, src=src, brightness=brightness)
+                    rgb = results[key] if self.rgb else cv2.cvtColor(results[key], cv2.COLOR_BGR2RGB)
+                    vahadane = self.normalizer(rgb, dst=dst, src=src, brightness=brightness)
                     mask = np.logical_or(vahadane < self.clip_range[0], vahadane > self.clip_range[1])
                     threshold = max(mask.sum() / mask.nbytes, threshold)
-                    data[key] = np.clip(vahadane, *self.clip_range)
+                    vahadane = np.clip(vahadane, *self.clip_range).astype('uint8')
+                    data[key] = vahadane if self.rgb else cv2.cvtColor(vahadane, cv2.COLOR_RGB2BGR)
                 if threshold < self.threshold:
                     results.update(data)
                     return results
@@ -1076,7 +1080,8 @@ class VahadaneDistortion:
         repr_str = self.__class__.__name__
         repr_str += '\nclip_range='
         repr_str += 'None' if self.clip_range is None else f'{list(self.clip_range)}'
-        repr_str += f', rgb={isinstance(self.normalizer, normalizer.VahadaneNormalRGB)}, '
+        #repr_str += f', rgb={isinstance(self.normalizer, normalizer.VahadaneNormalRGB)}, '
+        repr_str += f', rgb={self.rgb}, '
         repr_str += f'probability={self.probability}, '
         repr_str += f'offset={self.offset}, '
         repr_str += f'threshold={self.threshold})\n'
