@@ -1064,12 +1064,12 @@ class VahadaneDistortion:
                 threshold = 0
                 data = {}
                 for key in results.get('img_fields', ['img']):
-                    rgb = results[key] if self.rgb else cv2.cvtColor(results[key], cv2.COLOR_BGR2RGB)
+                    rgb = results[key] if self.rgb else results[key][..., ::-1].copy()
                     vahadane = self.normalizer(rgb, dst=dst, src=src, brightness=brightness)
                     mask = np.logical_or(vahadane < self.clip_range[0], vahadane > self.clip_range[1])
                     threshold = max(mask.sum() / mask.nbytes, threshold)
                     vahadane = np.clip(vahadane, *self.clip_range).astype('uint8')
-                    data[key] = vahadane if self.rgb else cv2.cvtColor(vahadane, cv2.COLOR_RGB2BGR)
+                    data[key] = vahadane if self.rgb else vahadane[..., ::-1]
                 if threshold < self.threshold:
                     results.update(data)
                     return results
