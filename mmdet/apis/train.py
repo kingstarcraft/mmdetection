@@ -154,8 +154,13 @@ def train_detector(model,
         val_samples_per_gpu = cfg.data.pop('samples_per_gpu', 1)
         if val_samples_per_gpu > 1:
             # Replace 'ImageToTensor' to 'DefaultFormatBundle'
-            cfg.data.val.pipeline = replace_ImageToTensor(
-                cfg.data.val.pipeline)
+            if isinstance(cfg.data.val, list) or isinstance(cfg.data.val, tuple):
+                for i in range(len(cfg.data.val)):
+                    cfg.data.val[i].pipeline = replace_ImageToTensor(
+                        cfg.data.val[i].pipeline)
+            else:
+                cfg.data.val.pipeline = replace_ImageToTensor(
+                    cfg.data.val.pipeline)
         val_dataset = build_dataset(cfg.data.val, dict(test_mode=True))
         val_dataloader = build_dataloader(
             val_dataset,
