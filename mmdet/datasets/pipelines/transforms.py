@@ -998,7 +998,7 @@ class ReinhardDistortion:
                     mask = np.logical_or(reinhard < self.clip_range[0], reinhard > self.clip_range[1])
                     threshold = max(mask.sum() / mask.nbytes, threshold)
                     data[key] = np.clip(reinhard, *self.clip_range)
-                if threshold < self.threshold:
+                if threshold <= self.threshold:
                     results.update(data)
                     return results
             break
@@ -1070,7 +1070,7 @@ class VahadaneDistortion:
                     threshold = max(mask.sum() / mask.nbytes, threshold)
                     vahadane = np.clip(vahadane, *self.clip_range).astype('uint8')
                     data[key] = vahadane if self.rgb else vahadane[..., ::-1]
-                if threshold < self.threshold:
+                if threshold <= self.threshold:
                     results.update(data)
                     return results
             break
