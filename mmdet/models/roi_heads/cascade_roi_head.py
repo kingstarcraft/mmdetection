@@ -23,6 +23,7 @@ class CascadeRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                  stage_loss_weights,
                  bbox_roi_extractor=None,
                  bbox_head=None,
+                 stage_weights=None,
                  mask_roi_extractor=None,
                  mask_head=None,
                  shared_head=None,
@@ -37,6 +38,7 @@ class CascadeRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
 
         self.num_stages = num_stages
         self.stage_loss_weights = stage_loss_weights
+        self.stage_weights = stage_weights
         super(CascadeRoIHead, self).__init__(
             bbox_roi_extractor=bbox_roi_extractor,
             bbox_head=bbox_head,
@@ -326,10 +328,17 @@ class CascadeRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                 ])
 
         # average scores of each image by stages
-        cls_score = [
-            sum([score[i] for score in ms_scores]) / float(len(ms_scores))
-            for i in range(num_imgs)
-        ]
+        if self.stage_weights is None:
+            cls_score = [
+                sum([score[i] for score in ms_scores]) / float(len(ms_scores))
+                for i in range(num_imgs)
+            ]
+        else:
+            assert len(self.stage_weights) == len(ms_scores)
+            cls_score = [
+                sum([(ms_scores[j][i]*self.stage_weights[j]) for j in range(len(ms_scores))])
+                for i in range(num_imgs)
+            ]
 
         # apply bbox post-processing to each image individually
         det_bboxes = []
