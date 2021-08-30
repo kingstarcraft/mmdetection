@@ -162,30 +162,35 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
                 size = np.array(self.sliding_window['size'])
                 step = np.array(self.sliding_window['step']) if 'step' in self.sliding_window else size
                 threshold = self.sliding_window['threshold'] if 'threshold' in self.sliding_window else 1
+                merge = zero.boxes.Merge(threshold=0.1)
                 filter = zero.boxes.Filter(threshold=threshold)
-                patches = zero.matrix.crop(imgs[0], size, size-step, start=-2, end=None)
-                result = None
+                patches = zero.matrix.crop(imgs[0], size, size - step, start=-2, end=None)
+                batch_size = len(img_metas[0])
+                outputs = [None for _ in range(batch_size)]
                 format_tuple = False
                 for (y, x), patch in patches:
-                    src = self.simple_test(patch, img_metas[0], **kwargs)[0]
-                    box = np.array([x, y, x, y, 0])
-                    dst = [(s+box) if s.shape[-1] == 5 else s for s in src]
-                    if result is None:
-                        result = dst
-                    elif isinstance(src, np.ndarray):
-                        result = np.concatenate([result, src])
+                    inputs = self.simple_test(patch, img_metas[0], **kwargs)
+                    for id in range(batch_size):
+                        src = inputs[id]
+                        box = np.array([x, y, x, y, 0])
+                        dst = [(s + box) if s.shape[-1] == 5 else s for s in src]
+                        if outputs[id] is None:
+                            outputs[id] = dst
+                        elif isinstance(src, np.ndarray):
+                            outputs[id] = np.concatenate([outputs[id], src])
+                        else:
+                            assert len(outputs[id]) == len(dst)
+                            outputs[id] = [np.concatenate((outputs[id][i], dst[i])) for i in range(len(src))]
+                            format_tuple = isinstance(src, tuple)
+                for id in range(batch_size):
+                    if isinstance(outputs[id], np.ndarray) and outputs[id].shape[-1] == 5:
+                        outputs[id] = filter(np.array(merge(outputs[id])))  # filter(outputs[id])
                     else:
-                        assert len(result) == len(dst)
-                        result = [np.concatenate((result[i], dst[i])) for i in range(len(src))]
-                        format_tuple = isinstance(src, tuple)
-                if isinstance(result, np.ndarray) and result.shape[-1] == 5:
-                    result = filter(result)
-                else:
-                    for i in range(len(result)):
-                        if result[i].shape[-1] == 5:
-                            result[i] = filter(result[i])
-                result = tuple(result) if format_tuple else result
-                return [result]
+                        for i in range(len(outputs[id])):
+                            if outputs[id][i].shape[-1] == 5:
+                                outputs[id][i] = filter(np.array(merge(outputs[id][i])))  # filter(outputs[id][i])
+                    outputs[id] = tuple(outputs[id]) if format_tuple else outputs[id]
+                return outputs
 
             return self.simple_test(imgs[0], img_metas[0], **kwargs)
         else:
@@ -196,7 +201,7 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             assert 'proposals' not in kwargs
             return self.aug_test(imgs, img_metas, **kwargs)
 
-    @auto_fp16(apply_to=('img', ))
+    @auto_fp16(apply_to=('img',))
     def forward(self, img, img_metas, return_loss=True, **kwargs):
         """Calls either :func:`forward_train` or :func:`forward_test` depending
         on whether ``return_loss`` is ``True``.
