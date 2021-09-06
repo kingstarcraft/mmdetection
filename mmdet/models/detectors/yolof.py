@@ -13,6 +13,7 @@ class YOLOF(SingleStageDetector):
                  bbox_head,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None):
+                 pretrained=None,
+                 **kwargs):
         super(YOLOF, self).__init__(backbone, neck, bbox_head, train_cfg,
-                                    test_cfg, pretrained)
+                                    test_cfg, pretrained, **kwargs)

@@ -20,8 +20,9 @@ class RPN(BaseDetector):
                  train_cfg,
                  test_cfg,
                  pretrained=None,
-                 init_cfg=None):
-        super(RPN, self).__init__(init_cfg)
+                 init_cfg=None,
+                 **kwargs):
+        super(RPN, self).__init__(init_cfg, **kwargs)
         if pretrained:
             warnings.warn('DeprecationWarning: pretrained is deprecated, '
                           'please use "init_cfg" instead')

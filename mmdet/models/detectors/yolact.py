@@ -18,9 +18,10 @@ class YOLACT(SingleStageDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 init_cfg=None):
+                 init_cfg=None,
+                 **kwargs):
         super(YOLACT, self).__init__(backbone, neck, bbox_head, train_cfg,
-                                     test_cfg, pretrained, init_cfg)
+                                     test_cfg, pretrained, init_cfg, **kwargs)
         self.segm_head = build_head(segm_head)
         self.mask_head = build_head(mask_head)
 

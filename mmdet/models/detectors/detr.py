@@ -15,9 +15,10 @@ class DETR(SingleStageDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 init_cfg=None):
+                 init_cfg=None,
+                 **kwargs):
         super(DETR, self).__init__(backbone, None, bbox_head, train_cfg,
-                                   test_cfg, pretrained, init_cfg)
+                                   test_cfg, pretrained, init_cfg, **kwargs)
 
     # over-write `onnx_export` because:
     # (1) the forward of bbox_head requires img_metas

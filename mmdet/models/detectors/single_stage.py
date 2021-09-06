@@ -22,8 +22,9 @@ class SingleStageDetector(BaseDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 init_cfg=None):
-        super(SingleStageDetector, self).__init__(init_cfg)
+                 init_cfg=None,
+                 **kwargs):
+        super(SingleStageDetector, self).__init__(init_cfg, **kwargs)
         if pretrained:
             warnings.warn('DeprecationWarning: pretrained is deprecated, '
                           'please use "init_cfg" instead')

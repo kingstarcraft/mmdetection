@@ -14,19 +14,11 @@ from mmdet.core.visualization import imshow_det_bboxes
 class BaseDetector(BaseModule, metaclass=ABCMeta):
     """Base class for detectors."""
 
-    def __init__(self, init_cfg=None):
-        if init_cfg is not None:
-            if 'sliding_window' in init_cfg:
-                self.sliding_window = init_cfg.pop('sliding_window')
-            elif isinstance(init_cfg, list):
-                for cfg in init_cfg:
-                    if cfg['type'] == 'SlidingWindow':
-                        init_cfg.remove(cfg)
-                        cfg.pop('type')
-                        self.sliding_window = cfg
-
+    def __init__(self, init_cfg=None, window=None, nms=None):
         super(BaseDetector, self).__init__(init_cfg)
         self.fp16_enabled = False
+        self.window = window
+        self.nms = nms
 
     @property
     def with_sliding_window(self):

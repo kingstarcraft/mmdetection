@@ -11,8 +11,8 @@ from mmdet.models import BaseDetector
 class DeployBaseDetector(BaseDetector):
     """DeployBaseDetector."""
 
-    def __init__(self, class_names, device_id):
-        super(DeployBaseDetector, self).__init__()
+    def __init__(self, class_names, device_id, **kwargs):
+        super(DeployBaseDetector, self).__init__(**kwargs)
         self.CLASSES = class_names
         self.device_id = device_id
 
@@ -95,8 +95,8 @@ class DeployBaseDetector(BaseDetector):
 class ONNXRuntimeDetector(DeployBaseDetector):
     """Wrapper for detector's inference with ONNXRuntime."""
 
-    def __init__(self, onnx_file, class_names, device_id):
-        super(ONNXRuntimeDetector, self).__init__(class_names, device_id)
+    def __init__(self, onnx_file, class_names, device_id, **kwargs):
+        super(ONNXRuntimeDetector, self).__init__(class_names, device_id, **kwargs)
         import onnxruntime as ort
 
         # get the custom op path
@@ -151,8 +151,8 @@ class ONNXRuntimeDetector(DeployBaseDetector):
 class TensorRTDetector(DeployBaseDetector):
     """Wrapper for detector's inference with TensorRT."""
 
-    def __init__(self, engine_file, class_names, device_id, output_names=None):
-        super(TensorRTDetector, self).__init__(class_names, device_id)
+    def __init__(self, engine_file, class_names, device_id, output_names=None, **kwargs):
+        super(TensorRTDetector, self).__init__(class_names, device_id, **kwargs)
         warnings.warn('`output_names` is deprecated and will be removed in '
                       'future releases.')
         from mmcv.tensorrt import TRTWraper, load_tensorrt_plugin
@@ -162,7 +162,7 @@ class TensorRTDetector(DeployBaseDetector):
             warnings.warn('If input model has custom op from mmcv, \
                 you may have to build mmcv with TensorRT from source.')
 
-        output_names = ['dets', 'labels']
+        output_names = ['dets', 'labels'] if output_names is None else output_names
         model = TRTWraper(engine_file, ['input'], output_names)
         with_masks = False
         # if TensorRT has totally 4 inputs/outputs, then

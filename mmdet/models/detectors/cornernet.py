@@ -20,9 +20,10 @@ class CornerNet(SingleStageDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 init_cfg=None):
+                 init_cfg=None,
+                 **kwargs):
         super(CornerNet, self).__init__(backbone, neck, bbox_head, train_cfg,
-                                        test_cfg, pretrained, init_cfg)
+                                        test_cfg, pretrained, init_cfg, **kwargs)
 
     def merge_aug_results(self, aug_results, img_metas):
         """Merge augmented detection bboxes and score.

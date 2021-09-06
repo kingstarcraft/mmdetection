@@ -17,7 +17,8 @@ class RepPointsDetector(SingleStageDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 init_cfg=None):
+                 init_cfg=None,
+                 **kwargs):
         super(RepPointsDetector,
               self).__init__(backbone, neck, bbox_head, train_cfg, test_cfg,
-                             pretrained, init_cfg)
+                             pretrained, init_cfg, **kwargs)
