@@ -280,3 +280,23 @@ class ClassBalancedDataset:
     def __len__(self):
         """Length after repetition."""
         return len(self.repeat_indices)
+
+
+@DATASETS.register_module()
+class DomainDataset:
+    def __init__(self, source, target):
+        super(DomainDataset, self).__init__()
+        self.CLASSES = source[0].CLASSES
+        self.source = source
+        self.target = target
+
+    def evaluate(self, results, **kwargs):
+        return self.source.evaluate(results, **kwargs)
+
+    def __getitem__(self, item):
+        source = self.source[item]
+        target = self.target[np.random.randint(0, len(self.target))]
+        return self.source[item]
+
+    def __len__(self):
+        return len(self.source)
