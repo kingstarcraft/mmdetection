@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 from .auto_augment import (AutoAugment, BrightnessTransform, ColorTransform,
                            ContrastTransform, EqualizeTransform, Rotate, Shear,
                            Translate)
@@ -8,10 +9,9 @@ from .instaboost import InstaBoost
 from .loading import (LoadAnnotations, LoadImageFromFile, LoadImageFromWebcam,
                       LoadMultiChannelImageFromFiles, LoadProposals)
 from .test_time_aug import MultiScaleFlipAug
-from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MinOverlapRandomCrop, Normalize, ReinhardNormalize,
-                         Pad, NormalizeDistortion, ReinhardDistortion, PhotoMetricDistortion, RandomCenterCropPad,
-                         RandomCrop, RandomFlip, RandomShift, Resize,
-                         SegRescale)
+from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MixUp, Mosaic, MinOverlapRandomCrop,
+					     Normalize, ReinhardNormalize, Pad, NormalizeDistortion, ReinhardDistortion, PhotoMetricDistortion, RandomAffine,
+ 						 RandomCenterCropPad, RandomCrop, RandomFlip, RandomShift, Resize, SegRescale)
 
 __all__ = [
     'Compose', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToDataContainer',
@@ -22,5 +22,6 @@ __all__ = [
     'MinIoURandomCrop', 'MinOverlapRandomCrop', 'Expand', 'NormalizeDistortion', 'ReinhardDistortion',
     'PhotoMetricDistortion', 'Albu', 'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
-    'ContrastTransform', 'Translate', 'RandomShift'
+    'ContrastTransform', 'Translate', 'RandomShift', 'Mosaic', 'MixUp',
+    'RandomAffine'
 ]
