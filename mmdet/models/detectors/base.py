@@ -18,11 +18,15 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
         super(BaseDetector, self).__init__(init_cfg)
         self.fp16_enabled = False
         self.window = window
-        self.nms = nms
+        self.nms = zero.boxes.NMS(**nms)
 
     @property
-    def with_sliding_window(self):
-        return hasattr(self, 'sliding_window') and self.sliding_window is not None
+    def with_window(self):
+        return hasattr(self, 'window') and self.window is not None
+
+    @property
+    def with_nms(self):
+        return hasattr(self, 'nms') and self.nms is not None
 
     @property
     def with_neck(self):
@@ -150,38 +154,67 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             # proposals.
             if 'proposals' in kwargs:
                 kwargs['proposals'] = kwargs['proposals'][0]
-            if self.with_sliding_window:
-                size = np.array(self.sliding_window['size'])
-                step = np.array(self.sliding_window['step']) if 'step' in self.sliding_window else size
-                threshold = self.sliding_window['threshold'] if 'threshold' in self.sliding_window else 1
-                merge = zero.boxes.Merge(threshold=0.1)
-                filter = zero.boxes.Filter(threshold=threshold)
+            if self.with_window:
+                size = np.array(self.window['size'])
+                step = np.array(self.window['step']) if 'step' in self.window else size
+                # merge = zero.boxes.Merge(threshold=0.1)
+                # filter = zero.boxes.Filter(threshold=threshold)
                 patches = zero.matrix.crop(imgs[0], size, size - step, start=-2, end=None)
                 batch_size = len(img_metas[0])
                 outputs = [None for _ in range(batch_size)]
-                format_tuple = False
+
                 for (y, x), patch in patches:
                     inputs = self.simple_test(patch, img_metas[0], **kwargs)
                     for id in range(batch_size):
-                        src = inputs[id]
-                        box = np.array([x, y, x, y, 0])
-                        dst = [(s + box) if s.shape[-1] == 5 else s for s in src]
-                        if outputs[id] is None:
-                            outputs[id] = dst
-                        elif isinstance(src, np.ndarray):
-                            outputs[id] = np.concatenate([outputs[id], src])
+                        input = inputs[id]
+                        if isinstance(input, tuple):
+                            ibox, imask = input
+                            if isinstance(imask, tuple):
+                                imask = imask[0]
+                            raise NotImplementedError('mask is not implemented')
                         else:
-                            assert len(outputs[id]) == len(dst)
-                            outputs[id] = [np.concatenate((outputs[id][i], dst[i])) for i in range(len(src))]
-                            format_tuple = isinstance(src, tuple)
-                for id in range(batch_size):
-                    if isinstance(outputs[id], np.ndarray) and outputs[id].shape[-1] == 5:
-                        outputs[id] = filter(np.array(merge(outputs[id])))  # filter(outputs[id])
-                    else:
-                        for i in range(len(outputs[id])):
-                            if outputs[id][i].shape[-1] == 5:
-                                outputs[id][i] = filter(np.array(merge(outputs[id][i])))  # filter(outputs[id][i])
-                    outputs[id] = tuple(outputs[id]) if format_tuple else outputs[id]
+                            ibox, imask = input, None
+                        offset = np.array([x, y, x, y, 0])
+                        obox = [b + offset for b in ibox]
+                        if outputs[id] is None:
+                            if imask is None:
+                                outputs[id] = obox
+                            else:
+                                assert len(imask) > 0
+                                func = torch.zeros if isinstance(imask[0], torch.Tensor) else np.zeros
+                                omask = []
+                                for im in imask:
+                                    mask = func(imgs[0][id].shape[2:], dtyp=im.dtype)
+                                    xmax = min(x + im.shape[1], mask.shape[1])
+                                    ymax = min(y + im.shape[0], mask.shape[0])
+                                    mask[y:ymax, x:xmax] = im[:ymax - y, xmax - x]
+                                    omask.append(mask)
+                                outputs[id] = obox, omask
+                        else:
+                            if imask is None:
+                                assert len(outputs[id]) == len(obox)
+                                outputs[id] = [np.concatenate((outputs[id][i], obox[i])) for i in range(len(ibox))]
+                            else:
+                                tbox, tmask = outputs[id]
+                                assert len(tbox) == len(obox)
+                                tbox = [np.concatenate((tbox[i], obox[i])) for i in range(len(ibox))]
+                                omask = []
+                                for im, tm in zip(imask, tmask):
+                                    xmax = min(x + im.shape[1], tm.shape[1])
+                                    ymax = min(y + im.shape[0], tm.shape[0])
+                                    tm[y:ymax, x:xmax] = im[:ymax - y, xmax - x]
+                                    omask.append(tm)
+                                outputs[id] = tbox, tmask
+
+                if self.with_nms:
+                    for id in range(batch_size):
+                        if isinstance(outputs[id], tuple):
+                            box, mask = outputs[id]
+                            box = [self.nms(b) for b in box]
+                            outputs[id] = box, mask
+                        else:
+                            box = outputs[id]
+                            outputs[id] = [self.nms(b) for b in box]
                 return outputs
 
             return self.simple_test(imgs[0], img_metas[0], **kwargs)
