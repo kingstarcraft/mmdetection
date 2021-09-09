@@ -20,15 +20,15 @@ class DistOptimizerHook(OptimizerHook):
     def before_run(self, runner):
         runner.optimizer.zero_grad()
 
-    def after_train_iter(self, runner):
-        runner.outputs['loss'] /= self.update_interval
+    def update(self, optimizer, loss, parameter, runner, name=None):
+        loss /= self.update_interval
         if self.use_fp16:
-            with apex.amp.scale_loss(runner.outputs['loss'], runner.optimizer) as scaled_loss:
+            with apex.amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
         else:
-            runner.outputs['loss'].backward()
+            loss.backward()
         if self.every_n_iters(runner, self.update_interval):
             if self.grad_clip is not None:
-                self.clip_grads(runner.model.parameters())
-            runner.optimizer.step()
-            runner.optimizer.zero_grad()
+                self.clip_grads(parameter)
+            optimizer.step()
+            optimizer.zero_grad()

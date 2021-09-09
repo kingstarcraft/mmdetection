@@ -19,7 +19,8 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
         super(BaseDetector, self).__init__(init_cfg)
         self.fp16_enabled = False
         self.window = window
-        self.nms = zero.boxes.NMS(**nms)
+        if nms is not None:
+            self.nms = zero.boxes.NMS(**nms)
 
     @property
     def with_window(self):
