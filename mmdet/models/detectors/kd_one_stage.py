@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import mmcv
 import torch
 from mmcv.runner import load_checkpoint
@@ -28,9 +29,10 @@ class KnowledgeDistillationSingleStageDetector(SingleStageDetector):
                  eval_teacher=True,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None):
+                 pretrained=None,
+                 **kwargs):
         super().__init__(backbone, neck, bbox_head, train_cfg, test_cfg,
-                         pretrained)
+                         pretrained, **kwargs)
         self.eval_teacher = eval_teacher
         # Build teacher model
         if isinstance(teacher_config, str):
@@ -45,7 +47,8 @@ class KnowledgeDistillationSingleStageDetector(SingleStageDetector):
                       img_metas,
                       gt_bboxes,
                       gt_labels,
-                      gt_bboxes_ignore=None):
+                      gt_bboxes_ignore=None,
+                      return_feature=False):
         """
         Args:
             img (Tensor): Input images of shape (N, C, H, W).
@@ -60,6 +63,7 @@ class KnowledgeDistillationSingleStageDetector(SingleStageDetector):
             gt_labels (list[Tensor]): Class indices corresponding to each box
             gt_bboxes_ignore (None | list[Tensor]): Specify which bounding
                 boxes can be ignored when computing the loss.
+            return_feature: Switch whether to return feature.
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
@@ -70,6 +74,8 @@ class KnowledgeDistillationSingleStageDetector(SingleStageDetector):
         losses = self.bbox_head.forward_train(x, out_teacher, img_metas,
                                               gt_bboxes, gt_labels,
                                               gt_bboxes_ignore)
+        if return_feature:
+            return x, losses
         return losses
 
     def cuda(self, device=None):

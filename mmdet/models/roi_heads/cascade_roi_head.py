@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
 import torch
 import torch.nn as nn
@@ -23,6 +24,7 @@ class CascadeRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                  stage_loss_weights,
                  bbox_roi_extractor=None,
                  bbox_head=None,
+                 stage_weights=None,
                  mask_roi_extractor=None,
                  mask_head=None,
                  shared_head=None,
@@ -37,6 +39,7 @@ class CascadeRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
 
         self.num_stages = num_stages
         self.stage_loss_weights = stage_loss_weights
+        self.stage_weights = stage_weights
         super(CascadeRoIHead, self).__init__(
             bbox_roi_extractor=bbox_roi_extractor,
             bbox_head=bbox_head,
@@ -280,7 +283,28 @@ class CascadeRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         return losses
 
     def simple_test(self, x, proposal_list, img_metas, rescale=False):
-        """Test without augmentation."""
+        """Test without augmentation.
+
+        Args:
+            x (tuple[Tensor]): Features from upstream network. Each
+                has shape (batch_size, c, h, w).
+            proposal_list (list(Tensor)): Proposals from rpn head.
+                Each has shape (num_proposals, 5), last dimension
+                5 represent (x1, y1, x2, y2, score).
+            img_metas (list[dict]): Meta information of images.
+            rescale (bool): Whether to rescale the results to
+                the original image. Default: True.
+
+        Returns:
+            list[list[np.ndarray]] or list[tuple]: When no mask branch,
+            it is bbox results of each image and classes with type
+            `list[list[np.ndarray]]`. The outer list
+            corresponds to each image. The inner list
+            corresponds to each class. When the model has mask branch,
+            it contains bbox results and mask results.
+            The outer list corresponds to each image, and first element
+            of tuple is bbox results, second element is mask results.
+        """
         assert self.with_bbox, 'Bbox head must be implemented.'
         num_imgs = len(proposal_list)
         img_shapes = tuple(meta['img_shape'] for meta in img_metas)
@@ -294,6 +318,24 @@ class CascadeRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         rcnn_test_cfg = self.test_cfg
 
         rois = bbox2roi(proposal_list)
+
+        if rois.shape[0] == 0:
+            # There is no proposal in the whole batch
+            bbox_results = [[
+                np.zeros((0, 5), dtype=np.float32)
+                for _ in range(self.bbox_head[-1].num_classes)
+            ]] * num_imgs
+
+            if self.with_mask:
+                mask_classes = self.mask_head[-1].num_classes
+                segm_results = [[[] for _ in range(mask_classes)]
+                                for _ in range(num_imgs)]
+                results = list(zip(bbox_results, segm_results))
+            else:
+                results = bbox_results
+
+            return results
+
         for i in range(self.num_stages):
             bbox_results = self._bbox_forward(i, x, rois)
 
@@ -317,19 +359,27 @@ class CascadeRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                         self.bbox_head[i].loss_cls.get_activation(s)
                         for s in cls_score
                     ]
-                bbox_label = [s[:, :-1].argmax(dim=1) for s in cls_score]
-                rois = torch.cat([
-                    self.bbox_head[i].regress_by_class(rois[j], bbox_label[j],
-                                                       bbox_pred[j],
-                                                       img_metas[j])
-                    for j in range(num_imgs)
-                ])
+                refine_rois_list = []
+                for j in range(num_imgs):
+                    if rois[j].shape[0] > 0:
+                        bbox_label = cls_score[j][:, :-1].argmax(dim=1)
+                        refined_rois = self.bbox_head[i].regress_by_class(
+                            rois[j], bbox_label, bbox_pred[j], img_metas[j])
+                        refine_rois_list.append(refined_rois)
+                rois = torch.cat(refine_rois_list)
 
         # average scores of each image by stages
-        cls_score = [
-            sum([score[i] for score in ms_scores]) / float(len(ms_scores))
-            for i in range(num_imgs)
-        ]
+        if self.stage_weights is None:
+            cls_score = [
+                sum([score[i] for score in ms_scores]) / float(len(ms_scores))
+                for i in range(num_imgs)
+            ]
+        else:
+            assert len(self.stage_weights) == len(ms_scores)
+            cls_score = [
+                sum([(ms_scores[j][i]*self.stage_weights[j]) for j in range(len(ms_scores))])
+                for i in range(num_imgs)
+            ]
 
         # apply bbox post-processing to each image individually
         det_bboxes = []
@@ -431,6 +481,13 @@ class CascadeRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
             ms_scores = []
 
             rois = bbox2roi([proposals])
+
+            if rois.shape[0] == 0:
+                # There is no proposal in the single image
+                aug_bboxes.append(rois.new_zeros(0, 4))
+                aug_scores.append(rois.new_zeros(0, 1))
+                continue
+
             for i in range(self.num_stages):
                 bbox_results = self._bbox_forward(i, x, rois)
                 ms_scores.append(bbox_results['cls_score'])

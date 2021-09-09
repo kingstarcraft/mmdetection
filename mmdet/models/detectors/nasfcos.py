@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 from ..builder import DETECTORS
 from .single_stage import SingleStageDetector
 
@@ -16,6 +17,7 @@ class NASFCOS(SingleStageDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 init_cfg=None):
+                 init_cfg=None,
+                 **kwargs):
         super(NASFCOS, self).__init__(backbone, neck, bbox_head, train_cfg,
-                                      test_cfg, pretrained, init_cfg)
+                                      test_cfg, pretrained, init_cfg, **kwargs)

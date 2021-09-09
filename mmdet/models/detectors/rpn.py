@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import warnings
 
 import mmcv
@@ -20,8 +21,9 @@ class RPN(BaseDetector):
                  train_cfg,
                  test_cfg,
                  pretrained=None,
-                 init_cfg=None):
-        super(RPN, self).__init__(init_cfg)
+                 init_cfg=None,
+                 **kwargs):
+        super(RPN, self).__init__(init_cfg, **kwargs)
         if pretrained:
             warnings.warn('DeprecationWarning: pretrained is deprecated, '
                           'please use "init_cfg" instead')
@@ -60,7 +62,8 @@ class RPN(BaseDetector):
                       img,
                       img_metas,
                       gt_bboxes=None,
-                      gt_bboxes_ignore=None):
+                      gt_bboxes_ignore=None,
+                      return_feature=False):
         """
         Args:
             img (Tensor): Input images of shape (N, C, H, W).
@@ -74,6 +77,7 @@ class RPN(BaseDetector):
                 image in [tl_x, tl_y, br_x, br_y] format.
             gt_bboxes_ignore (None | list[Tensor]): Specify which bounding
                 boxes can be ignored when computing the loss.
+            return_feature: Switch whether to return feature.
 
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
@@ -85,6 +89,8 @@ class RPN(BaseDetector):
         x = self.extract_feat(img)
         losses = self.rpn_head.forward_train(x, img_metas, gt_bboxes, None,
                                              gt_bboxes_ignore)
+        if return_feature:
+            return x, losses
         return losses
 
     def simple_test(self, img, img_metas, rescale=False):
@@ -151,4 +157,4 @@ class RPN(BaseDetector):
         Returns:
             np.ndarray: The image with bboxes drawn on it.
         """
-        mmcv.imshow_bboxes(data, result, top_k=top_k)
+        mmcv.imshow_bboxes(data, result, top_k=top_k, **kwargs)

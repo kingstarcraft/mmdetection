@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 from ..builder import DETECTORS
 from .two_stage import TwoStageDetector
 
@@ -19,6 +20,7 @@ class SparseRCNN(TwoStageDetector):
                       gt_bboxes_ignore=None,
                       gt_masks=None,
                       proposals=None,
+                      return_feature=False,
                       **kwargs):
         """Forward function of SparseR-CNN in train stage.
 
@@ -39,6 +41,7 @@ class SparseRCNN(TwoStageDetector):
                 each box. But we don't support it in this architecture.
             proposals (List[Tensor], optional): override rpn proposals with
                 custom proposals. Use when `with_rpn` is False.
+            return_feature: Switch whether to return feature.
 
         Returns:
             dict[str, Tensor]: a dictionary of loss components
@@ -61,6 +64,8 @@ class SparseRCNN(TwoStageDetector):
             gt_bboxes_ignore=gt_bboxes_ignore,
             gt_masks=gt_masks,
             imgs_whwh=imgs_whwh)
+        if return_feature:
+            return x, roi_losses
         return roi_losses
 
     def simple_test(self, img, img_metas, rescale=False):

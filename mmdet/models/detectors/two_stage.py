@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import warnings
 
 import torch
@@ -22,8 +23,9 @@ class TwoStageDetector(BaseDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 init_cfg=None):
-        super(TwoStageDetector, self).__init__(init_cfg)
+                 init_cfg=None,
+                 **kwargs):
+        super(TwoStageDetector, self).__init__(init_cfg, **kwargs)
         if pretrained:
             warnings.warn('DeprecationWarning: pretrained is deprecated, '
                           'please use "init_cfg" instead')
@@ -94,6 +96,7 @@ class TwoStageDetector(BaseDetector):
                       gt_bboxes_ignore=None,
                       gt_masks=None,
                       proposals=None,
+                      return_feature=False,
                       **kwargs):
         """
         Args:
@@ -120,6 +123,7 @@ class TwoStageDetector(BaseDetector):
             proposals : override rpn proposals with custom proposals. Use when
                 `with_rpn` is False.
 
+            return_feature: Switch whether to return feature.
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
@@ -148,6 +152,8 @@ class TwoStageDetector(BaseDetector):
                                                  **kwargs)
         losses.update(roi_losses)
 
+        if return_feature:
+            return x, losses
         return losses
 
     async def async_simple_test(self,

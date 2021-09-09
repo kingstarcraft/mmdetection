@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 # Copyright (c) 2019 Western Digital Corporation or its affiliates.
 
 from ..builder import DETECTORS
@@ -14,6 +15,7 @@ class YOLOV3(SingleStageDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 init_cfg=None):
+                 init_cfg=None,
+                 **kwargs):
         super(YOLOV3, self).__init__(backbone, neck, bbox_head, train_cfg,
-                                     test_cfg, pretrained, init_cfg)
+                                     test_cfg, pretrained, init_cfg, **kwargs)

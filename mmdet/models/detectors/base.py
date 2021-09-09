@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
 
@@ -14,23 +15,19 @@ from mmdet.core.visualization import imshow_det_bboxes
 class BaseDetector(BaseModule, metaclass=ABCMeta):
     """Base class for detectors."""
 
-    def __init__(self, init_cfg=None):
-        if init_cfg is not None:
-            if 'sliding_window' in init_cfg:
-                self.sliding_window = init_cfg.pop('sliding_window')
-            elif isinstance(init_cfg, list):
-                for cfg in init_cfg:
-                    if cfg['type'] == 'SlidingWindow':
-                        init_cfg.remove(cfg)
-                        cfg.pop('type')
-                        self.sliding_window = cfg
-
+    def __init__(self, init_cfg=None, window=None, nms=None):
         super(BaseDetector, self).__init__(init_cfg)
         self.fp16_enabled = False
+        self.window = window
+        self.nms = zero.boxes.NMS(**nms)
 
     @property
-    def with_sliding_window(self):
-        return hasattr(self, 'sliding_window') and self.sliding_window is not None
+    def with_window(self):
+        return hasattr(self, 'window') and self.window is not None
+
+    @property
+    def with_nms(self):
+        return hasattr(self, 'nms') and self.nms is not None
 
     @property
     def with_neck(self):
@@ -158,34 +155,68 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             # proposals.
             if 'proposals' in kwargs:
                 kwargs['proposals'] = kwargs['proposals'][0]
-            if self.with_sliding_window:
-                size = np.array(self.sliding_window['size'])
-                step = np.array(self.sliding_window['step']) if 'step' in self.sliding_window else size
-                threshold = self.sliding_window['threshold'] if 'threshold' in self.sliding_window else 1
-                filter = zero.boxes.Filter(threshold=threshold)
-                patches = zero.matrix.crop(imgs[0], size, size-step, start=-2, end=None)
-                result = None
-                format_tuple = False
+            if self.with_window:
+                size = np.array(self.window['size'])
+                step = np.array(self.window['step']) if 'step' in self.window else size
+                # merge = zero.boxes.Merge(threshold=0.1)
+                # filter = zero.boxes.Filter(threshold=threshold)
+                patches = zero.matrix.crop(imgs[0], size, size - step, start=-2, end=None)
+                batch_size = len(img_metas[0])
+                outputs = [None for _ in range(batch_size)]
+
                 for (y, x), patch in patches:
-                    src = self.simple_test(patch, img_metas[0], **kwargs)[0]
-                    box = np.array([x, y, x, y, 0])
-                    dst = [(s+box) if s.shape[-1] == 5 else s for s in src]
-                    if result is None:
-                        result = dst
-                    elif isinstance(src, np.ndarray):
-                        result = np.concatenate([result, src])
-                    else:
-                        assert len(result) == len(dst)
-                        result = [np.concatenate((result[i], dst[i])) for i in range(len(src))]
-                        format_tuple = isinstance(src, tuple)
-                if isinstance(result, np.ndarray) and result.shape[-1] == 5:
-                    result = filter(result)
-                else:
-                    for i in range(len(result)):
-                        if result[i].shape[-1] == 5:
-                            result[i] = filter(result[i])
-                result = tuple(result) if format_tuple else result
-                return [result]
+                    inputs = self.simple_test(patch, img_metas[0], **kwargs)
+                    for id in range(batch_size):
+                        input = inputs[id]
+                        if isinstance(input, tuple):
+                            ibox, imask = input
+                            if isinstance(imask, tuple):
+                                imask = imask[0]
+                            raise NotImplementedError('mask is not implemented')
+                        else:
+                            ibox, imask = input, None
+                        offset = np.array([x, y, x, y, 0])
+                        obox = [b + offset for b in ibox]
+                        if outputs[id] is None:
+                            if imask is None:
+                                outputs[id] = obox
+                            else:
+                                assert len(imask) > 0
+                                func = torch.zeros if isinstance(imask[0], torch.Tensor) else np.zeros
+                                omask = []
+                                for im in imask:
+                                    mask = func(imgs[0][id].shape[2:], dtyp=im.dtype)
+                                    xmax = min(x + im.shape[1], mask.shape[1])
+                                    ymax = min(y + im.shape[0], mask.shape[0])
+                                    mask[y:ymax, x:xmax] = im[:ymax - y, xmax - x]
+                                    omask.append(mask)
+                                outputs[id] = obox, omask
+                        else:
+                            if imask is None:
+                                assert len(outputs[id]) == len(obox)
+                                outputs[id] = [np.concatenate((outputs[id][i], obox[i])) for i in range(len(ibox))]
+                            else:
+                                tbox, tmask = outputs[id]
+                                assert len(tbox) == len(obox)
+                                tbox = [np.concatenate((tbox[i], obox[i])) for i in range(len(ibox))]
+                                omask = []
+                                for im, tm in zip(imask, tmask):
+                                    xmax = min(x + im.shape[1], tm.shape[1])
+                                    ymax = min(y + im.shape[0], tm.shape[0])
+                                    tm[y:ymax, x:xmax] = im[:ymax - y, xmax - x]
+                                    omask.append(tm)
+                                outputs[id] = tbox, tmask
+
+                if self.with_nms:
+                    for id in range(batch_size):
+                        if isinstance(outputs[id], tuple):
+                            box, mask = outputs[id]
+                            box = [self.nms(b) for b in box]
+                            outputs[id] = box, mask
+                        else:
+                            box = outputs[id]
+                            outputs[id] = [self.nms(b) for b in box]
+                return outputs
 
             return self.simple_test(imgs[0], img_metas[0], **kwargs)
         else:
@@ -196,7 +227,7 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             assert 'proposals' not in kwargs
             return self.aug_test(imgs, img_metas, **kwargs)
 
-    @auto_fp16(apply_to=('img', ))
+    @auto_fp16(apply_to=('img',))
     def forward(self, img, img_metas, return_loss=True, **kwargs):
         """Calls either :func:`forward_train` or :func:`forward_test` depending
         on whether ``return_loss`` is ``True``.
@@ -270,13 +301,13 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             dict: It should contain at least 3 keys: ``loss``, ``log_vars``, \
                 ``num_samples``.
 
-                - ``loss`` is a tensor for back propagation, which can be a \
-                weighted sum of multiple losses.
+                - ``loss`` is a tensor for back propagation, which can be a
+                  weighted sum of multiple losses.
                 - ``log_vars`` contains all the variables to be sent to the
-                logger.
-                - ``num_samples`` indicates the batch size (when the model is \
-                DDP, it means the batch size on each GPU), which is used for \
-                averaging the logs.
+                  logger.
+                - ``num_samples`` indicates the batch size (when the model is
+                  DDP, it means the batch size on each GPU), which is used for
+                  averaging the logs.
         """
         losses = self(**data)
         loss, log_vars = self._parse_losses(losses)
