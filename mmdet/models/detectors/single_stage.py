@@ -60,7 +60,8 @@ class SingleStageDetector(BaseDetector):
                       img_metas,
                       gt_bboxes,
                       gt_labels,
-                      gt_bboxes_ignore=None):
+                      gt_bboxes_ignore=None,
+                      return_feature=False):
         """
         Args:
             img (Tensor): Input images of shape (N, C, H, W).
@@ -75,6 +76,7 @@ class SingleStageDetector(BaseDetector):
             gt_labels (list[Tensor]): Class indices corresponding to each box
             gt_bboxes_ignore (None | list[Tensor]): Specify which bounding
                 boxes can be ignored when computing the loss.
+            return_feature: Switch whether to return feature.
 
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
@@ -83,6 +85,8 @@ class SingleStageDetector(BaseDetector):
         x = self.extract_feat(img)
         losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
                                               gt_labels, gt_bboxes_ignore)
+        if return_feature:
+            return x, losses
         return losses
 
     def simple_test(self, img, img_metas, rescale=False):

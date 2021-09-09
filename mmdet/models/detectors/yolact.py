@@ -39,7 +39,8 @@ class YOLACT(SingleStageDetector):
                       gt_bboxes,
                       gt_labels,
                       gt_bboxes_ignore=None,
-                      gt_masks=None):
+                      gt_masks=None,
+                      return_feature=False):
         """
         Args:
             img (Tensor): of shape (N, C, H, W) encoding input images.
@@ -56,6 +57,7 @@ class YOLACT(SingleStageDetector):
                 boxes can be ignored when computing the loss.
             gt_masks (None | Tensor) : true segmentation masks for each box
                 used if the architecture supports a segmentation task.
+            return_feature: Switch whether to return feature.
 
         Returns:
             dict[str, Tensor]: a dictionary of loss components
@@ -90,6 +92,8 @@ class YOLACT(SingleStageDetector):
                 .all().item(), '{} becomes infinite or NaN!'\
                 .format(loss_name)
 
+        if return_feature:
+            return x, losses
         return losses
 
     def simple_test(self, img, img_metas, rescale=False):

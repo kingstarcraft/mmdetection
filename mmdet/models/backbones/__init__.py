@@ -6,6 +6,7 @@ from .detectors_resnext import DetectoRS_ResNeXt
 from .hourglass import HourglassNet
 from .hrnet import HRNet
 from .mobilenet_v2 import MobileNetV2
+from .nlayer import NLayer
 from .regnet import RegNet
 from .res2net import Res2Net
 from .resnest import ResNeSt
@@ -14,11 +15,11 @@ from .resnext import ResNeXt
 from .ssd_vgg import SSDVGG
 from .swin import SwinTransformer
 from .trident_resnet import TridentResNet
-from .swin_transformer import SwinTransformer
+
 
 __all__ = [
     'RegNet', 'ResNet', 'ResNetV1d', 'ResNeXt', 'SSDVGG', 'HRNet',
-    'MobileNetV2', 'Res2Net', 'HourglassNet', 'DetectoRS_ResNet',
+    'MobileNetV2', 'NLayer', 'Res2Net', 'HourglassNet', 'DetectoRS_ResNet',
     'DetectoRS_ResNeXt', 'Darknet', 'ResNeSt', 'TridentResNet', 'CSPDarknet',
     'SwinTransformer'
 ]

@@ -72,6 +72,7 @@ class TwoStagePanopticSegmentor(TwoStageDetector):
                       gt_masks=None,
                       gt_semantic_seg=None,
                       proposals=None,
+                      return_feature=False,
                       **kwargs):
         x = self.extract_feat(img)
         losses = dict()
@@ -99,6 +100,8 @@ class TwoStagePanopticSegmentor(TwoStageDetector):
 
         semantic_loss = self.semantic_head.forward_train(x, gt_semantic_seg)
         losses.update(semantic_loss)
+        if return_feature:
+            return x, losses
 
         return losses
 

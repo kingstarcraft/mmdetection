@@ -289,7 +289,9 @@ class ClassBalancedDataset:
 class DomainDataset:
     def __init__(self, source, target):
         super(DomainDataset, self).__init__()
-        self.CLASSES = source[0].CLASSES
+        self.CLASSES = source.CLASSES
+        if hasattr(source, 'flag'):
+            self.flag = source.flag
         self.source = source
         self.target = target
 
@@ -299,7 +301,8 @@ class DomainDataset:
     def __getitem__(self, item):
         source = self.source[item]
         target = self.target[np.random.randint(0, len(self.target))]
-        return self.source[item]
+        source['fake'] = target['img']
+        return source
 
     def __len__(self):
         return len(self.source)
