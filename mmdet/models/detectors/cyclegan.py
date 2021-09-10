@@ -32,10 +32,11 @@ class CycleGAN(GAN):
             return outputs
 
     def __init__(self, generator, discriminator,
-                 loss=dict(type='MSELoss', loss_weight=0.005),
+                 generator_loss=dict(type='MSELoss', loss_weight=0.01),
+                 discriminator_loss=dict(type='MSELoss', loss_weight=1),
                  pool=dict(size=50, probability=0.5),
                  **kwargs):
-        super(CycleGAN, self).__init__(generator, discriminator, loss, **kwargs)
+        super(CycleGAN, self).__init__(generator, discriminator, generator_loss, discriminator_loss, **kwargs)
 
         self.pools = None
         self.build_pool = lambda: self.Pool(**pool)
