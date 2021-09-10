@@ -10,7 +10,9 @@ from ..builder import DETECTORS, build_backbone, build_loss, build_detector
 
 @DETECTORS.register_module()
 class GAN(BaseModule, metaclass=ABCMeta):
-    def __init__(self, generator, discriminator, loss=dict(type='MSELoss', loss_weight=0.005), **kwargs):
+    def __init__(self, generator, discriminator,
+                 generator_loss=dict(type='MSELoss', loss_weight=0.01),
+                 discriminator_loss=dict(type='MSELoss', loss_weight=1), **kwargs):
         super(GAN, self).__init__()
         self.generator = build_detector(generator, **kwargs)
         if isinstance(discriminator, dict):
@@ -31,7 +33,8 @@ class GAN(BaseModule, metaclass=ABCMeta):
             self.discriminator = torch.nn.ModuleDict(discriminate)
         self.register_buffer('real_label', torch.tensor(1.0))
         self.register_buffer('fake_label', torch.tensor(0.0))
-        self.loss = build_loss(loss)
+        self.generator_loss = build_loss(generator_loss)
+        self.discriminator_loss = build_loss(discriminator_loss)
 
     def generate(self, imgs):
         return self.generator.extract_feat(imgs)
@@ -60,7 +63,7 @@ class GAN(BaseModule, metaclass=ABCMeta):
         for key, model in self.discriminator.items():
             index = int(key.replace('discriminator', ''))
             generator_predict = model(fake_features[index])
-            generate_loss = self.loss(generator_predict, self.real_label.expand_as(generator_predict))
+            generate_loss = self.generator_loss(generator_predict, self.real_label.expand_as(generator_predict))
             generate_losses.append(generate_loss)
 
         real_features, fake_features = self.discriminate(real_features, fake_features)
@@ -69,8 +72,8 @@ class GAN(BaseModule, metaclass=ABCMeta):
             index = int(key.replace('discriminator', ''))
             real_predict = model(real_features[index])
             fake_predict = model(fake_features[index])
-            real_loss = self.loss(real_predict, self.real_label.expand_as(real_predict))
-            fake_loss = self.loss(fake_predict, self.real_label.expand_as(fake_predict))
+            real_loss = self.discriminator_loss(real_predict, self.real_label.expand_as(real_predict))
+            fake_loss = self.discriminator_loss(fake_predict, self.real_label.expand_as(fake_predict))
             discriminate_losses.append(0.5 * (real_loss + fake_loss))
         generate_loss = torch.mean(torch.stack(generate_losses))
         discriminate_loss = torch.mean(torch.stack(discriminate_losses))
@@ -126,16 +129,16 @@ class GAN(BaseModule, metaclass=ABCMeta):
                             if 'loss' in _key)
 
         log_vars['detector_loss'] = detector_loss
+        log_vars['generate_loss'] = generate_loss
         log_vars['discriminate_loss'] = discriminate_loss
-        log_vars['generate_loss'] = generate_loss + detector_loss
-
+        log_vars['loss'] = generate_loss + detector_loss
         for loss_name, loss_value in log_vars.items():
             # reduce loss when distributed training
             if dist.is_available() and dist.is_initialized():
                 loss_value = loss_value.data.clone()
                 dist.all_reduce(loss_value.div_(dist.get_world_size()))
             log_vars[loss_name] = loss_value.item()
-
+        generate_loss = log_vars.pop('loss')
         return generate_loss, discriminate_loss, log_vars
 
     def train_step(self, data, optimizer):
