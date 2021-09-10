@@ -131,15 +131,13 @@ class GAN(BaseModule, metaclass=ABCMeta):
         log_vars['detector_loss'] = detector_loss
         log_vars['generate_loss'] = generate_loss
         log_vars['discriminate_loss'] = discriminate_loss
-        log_vars['loss'] = generate_loss + detector_loss
         for loss_name, loss_value in log_vars.items():
             # reduce loss when distributed training
             if dist.is_available() and dist.is_initialized():
                 loss_value = loss_value.data.clone()
                 dist.all_reduce(loss_value.div_(dist.get_world_size()))
             log_vars[loss_name] = loss_value.item()
-        generate_loss = log_vars.pop('loss')
-        return generate_loss, discriminate_loss, log_vars
+        return generate_loss + detector_loss, discriminate_loss, log_vars
 
     def train_step(self, data, optimizer):
         """The iteration step during training.
