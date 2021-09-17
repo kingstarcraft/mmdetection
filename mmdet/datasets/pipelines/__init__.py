@@ -10,8 +10,9 @@ from .loading import (LoadAnnotations, LoadImageFromFile, LoadImageFromWebcam,
                       LoadMultiChannelImageFromFiles, LoadProposals)
 from .test_time_aug import MultiScaleFlipAug
 from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MixUp, Mosaic, MinOverlapRandomCrop,
-					     Normalize, ReinhardNormalize, Pad, NormalizeDistortion, ReinhardDistortion, PhotoMetricDistortion, RandomAffine,
- 						 RandomCenterCropPad, RandomCrop, RandomFlip, RandomShift, Resize, SegRescale)
+                         Normalize, ReinhardNormalize, Pad, NormalizeDistortion, ReinhardDistortion,
+                         PhotoMetricDistortion, RandomAffine,
+                         RandomCenterCropPad, RandomCrop, RandomFlip, RandomShift, Resize, SegRescale)
 
 __all__ = [
     'Compose', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToDataContainer',

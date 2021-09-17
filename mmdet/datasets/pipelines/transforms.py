@@ -11,6 +11,7 @@ import mmcv
 import numpy as np
 from numpy import random
 from zero.image import normalizer
+from zero import math
 
 from mmdet.core import PolygonMasks
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
@@ -949,9 +950,9 @@ class SegRescale:
 
 @PIPELINES.register_module()
 class NormalizeDistortion:
-    def __init__(self, mean_range, std_range, to_rgb=True):
-        self.mean_range = np.array(mean_range, dtype=np.float32)
-        self.std_range = np.array(std_range, dtype=np.float32)
+    def __init__(self, mean, std, to_rgb=True):
+        self.mean = np.array(mean, dtype=np.float32)
+        self.std = np.array(std, dtype=np.float32)
         self.to_rgb = to_rgb
 
     def __call__(self, results):
@@ -964,8 +965,8 @@ class NormalizeDistortion:
             dict: Normalized results, 'img_norm_cfg' key is added into
                 result dict.
         """
-        mean = np.random.uniform(self.mean_range[0], self.mean_range[-1])
-        std = np.random.uniform(self.std_range[0], self.std_range[-1])
+        mean = np.random.uniform(self.mean[0], self.mean[-1])
+        std = np.random.uniform(self.std[0], self.std[-1])
         for key in results.get('img_fields', ['img']):
             results[key] = mmcv.imnormalize(results[key], mean, std, self.to_rgb)
         results['img_norm_cfg'] = dict(
@@ -975,31 +976,53 @@ class NormalizeDistortion:
     def __int__(self):
         repr_str = self.__class__.__name__
         repr_str += '\n(mean_range='
-        repr_str += f'({self.mean_range[0][0]},{self.mean_range[0][1]},{self.mean_range[0][2]})==>'
-        repr_str += f'({self.mean_range[1][0]},{self.mean_range[1][1]},{self.mean_range[1][2]})\n'
+        repr_str += f'({self.mean[0][0]},{self.mean[0][1]},{self.mean[0][2]})==>'
+        repr_str += f'({self.mean[1][0]},{self.mean[1][1]},{self.mean[1][2]})\n'
         repr_str += 'std_range='
-        repr_str += f'({self.std_range[0][0]},{self.std_range[0][1]},{self.std_range[0][2]})==>'
-        repr_str += f'({self.std_range[1][0]},{self.std_range[1][1]},{self.std_range[1][2]})\n'
+        repr_str += f'({self.std[0][0]},{self.std[0][1]},{self.std[0][2]})==>'
+        repr_str += f'({self.std[1][0]},{self.std[1][1]},{self.std[1][2]})\n'
         repr_str += f'to_rgb={self.to_rgb}\n'
 
 
 @PIPELINES.register_module()
 class ReinhardDistortion:
-    def __init__(self, mean_range, std_range,
-                 offset=0.5, threshold=0.2, probability=0.5, rgb=True, clip_range=(0, 255)):
-        mean_range = np.array(mean_range)
-        std_range = np.array(std_range)
-        assert 1 <= mean_range.ndim <= 2
-        assert 1 <= std_range.ndim <= 2
+    def __init__(self, sample, threshold=0.2, probability=0.5, rgb=True, clip_range=(0, 255)):
+        if isinstance(sample, str):
+            sample = json.load(open(sample))
+        if isinstance(sample, dict):
+            mean = np.array(sample['mean'])
+            std = np.array(sample['std'])
+            ratio = sample['ratio']
+            assert 1 <= mean.ndim <= 2
+            assert 1 <= std.ndim <= 2
 
-        self.mean_range = mean_range if mean_range.shape[0] == 2 else mean_range.T
-        self.std_range = std_range if std_range.shape[0] == 2 else std_range.T
-        self.std_diff = np.abs(self.mean_range[-1] - self.mean_range[0]) * offset
-        self.mean_diff = np.abs(self.std_range[-1] - self.std_range[0]) * offset
+            dst_mean = mean if mean.shape[0] == 2 else mean.T
+            dst_std = std if std.shape[0] == 2 else std.T
+            src_mean = np.abs(dst_mean[-1] - dst_mean[0]) * ratio
+            src_std = np.abs(dst_std[-1] - dst_std[0]) * ratio
+            self.sampler = {
+                'src': [math.Uniform(src_mean), math.Uniform(src_std)],
+                'dst': [math.Uniform((mean[0], mean[1])), math.Uniform((std[0], std[1]))]
+            }
+        elif isinstance(sample, list):
+            self.sampler = [
+                ((np.array(src[0]), np.array(src[0])), (np.array(dst[0]), np.array(dst[0])))
+                for src, dst in sample
+            ]
+        else:
+            raise NotImplementedError
+
         self.threshold = threshold
         self.probability = probability
         self.normalizer = normalizer.ReinhardNormalRGB() if rgb else normalizer.ReinhardNormalBGR()
         self.clip_range = clip_range
+
+    def sample(self):
+        if isinstance(self.sampler, dict):
+            return (self.sampler['src'][0](), self.sampler['src'][1]()), \
+                   (self.sampler['dst'][0](), self.sampler['dst'][1]())
+        else:
+            return self._sample[random.randint(0, len(self.sampler))]
 
     def __call__(self, results):
         img_info = results.get('img_info', {})
@@ -1007,10 +1030,7 @@ class ReinhardDistortion:
         switch = np.random.uniform(0, 1) < self.probability
         while switch:
             for i in range(50):
-                dst = (np.random.uniform(self.mean_range[0], self.mean_range[-1]),
-                       np.random.uniform(self.std_range[0], self.std_range[-1]))
-                offset = (np.random.uniform(-self.mean_diff, self.mean_diff),
-                          np.random.uniform(-self.std_diff, self.std_diff))
+                offset, dst = self.sample()
                 threshold = 0
                 data = {}
                 for key in results.get('img_fields', ['img']):
@@ -1026,17 +1046,10 @@ class ReinhardDistortion:
 
     def __repr__(self):
         repr_str = self.__class__.__name__
-        repr_str += '\n(mean_range='
-        repr_str += f'[{self.mean_range[0][0]},{self.mean_range[0][1]},{self.mean_range[0][2]}]==>'
-        repr_str += f'[{self.mean_range[1][0]},{self.mean_range[1][1]},{self.mean_range[1][2]}]\n'
-        repr_str += 'std_range='
-        repr_str += f'[{self.std_range[0][0]},{self.std_range[0][1]},{self.std_range[0][2]}]==>'
-        repr_str += f'[{self.std_range[1][0]},{self.std_range[1][1]},{self.std_range[1][2]}]\n'
-        repr_str += 'clip_range='
+        repr_str += '\n(clip_range='
         repr_str += 'None, ' if self.clip_range is None else f'{list(self.clip_range)}, '
         repr_str += f'rgb={isinstance(self.normalizer, normalizer.ReinhardNormalRGB)}, '
         repr_str += f'probability={self.probability}, '
-        repr_str += f'offset={self.offset}, '
         repr_str += f'threshold={self.threshold})\n'
         return repr_str
 
@@ -1047,11 +1060,16 @@ class VahadaneDistortion:
         if isinstance(sample, str):
             sample = json.load(open(sample))
         if isinstance(sample, dict):
-            self.sampler = sklearn.mixture.GaussianMixture(len(sample['mean']), covariance_type='full')
-            self.sampler.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(sample['covariance']))
-            self.sampler.means_ = np.array(sample['mean'])
-            self.sampler.weights_ = np.array(sample['weight'])
-            self.sampler.covariances_ = np.array(sample['covariance'])
+            if 'covariance' in sample:
+                self.sampler = sklearn.mixture.GaussianMixture(len(sample['mean']), covariance_type='full')
+                self.sampler.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(sample['covariance']))
+                self.sampler.means_ = np.array(sample['mean'])
+                self.sampler.weights_ = np.array(sample['weight'])
+                self.sampler.covariances_ = np.array(sample['covariance'])
+            elif 'max' in sample and 'min' in sample:
+                self.sampler = math.Uniform((sample['min'], sample['max']))
+            else:
+                raise NotImplementedError
         elif isinstance(sample, list):
             self.sampler = [np.array(_) for _ in sample]
         else:
@@ -1065,6 +1083,8 @@ class VahadaneDistortion:
     def sample(self):
         if isinstance(self.sampler, list):
             return self.sampler[np.random.randint(0, len(self.sampler))]
+        elif isinstance(self.sampler, math.Uniform):
+            self.sampler().reshape([-1, 3])
         else:
             return self.sampler.sample()[0].reshape([-1, 3])
 
