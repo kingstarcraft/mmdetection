@@ -1084,7 +1084,7 @@ class VahadaneDistortion:
         if isinstance(self.sampler, list):
             return self.sampler[np.random.randint(0, len(self.sampler))]
         elif isinstance(self.sampler, math.Uniform):
-            self.sampler().reshape([-1, 3])
+            return self.sampler().reshape([-1, 3])
         else:
             return self.sampler.sample()[0].reshape([-1, 3])
 

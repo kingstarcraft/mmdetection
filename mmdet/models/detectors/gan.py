@@ -1,3 +1,4 @@
+import copy
 from abc import ABCMeta
 from collections import OrderedDict
 
@@ -20,6 +21,7 @@ class GAN(BaseModule, metaclass=ABCMeta):
         if isinstance(discriminator, (tuple, list)):
             discriminate = {}
             for param in discriminator:
+                param = copy.deepcopy(param)
                 index = param.pop('index')
                 shared = param.pop('shared', False)
                 if isinstance(index, int):
@@ -179,31 +181,10 @@ class GAN(BaseModule, metaclass=ABCMeta):
     def val_step(self, data, optimizer=None):
         return self.generator.val_step(data, optimizer)
 
-    def show_result(self,
-                    img,
-                    result,
-                    score_thr=0.3,
-                    bbox_color=(72, 101, 241),
-                    text_color=(72, 101, 241),
-                    mask_color=None,
-                    thickness=2,
-                    font_size=13,
-                    win_name='',
-                    show=False,
-                    wait_time=0,
-                    out_file=None):
-        return self.generator.show_result(img,
-                                          result,
-                                          score_thr,
-                                          bbox_color,
-                                          text_color,
-                                          mask_color,
-                                          thickness,
-                                          font_size,
-                                          win_name,
-                                          show,
-                                          wait_time,
-                                          out_file)
+    def show_result(self, *args, **kwargs):
+        if not hasattr(self.generator, 'CLASSES'):
+            self.generator.CLASSES = self.CLASSES
+        return self.generator.show_result(*args, **kwargs)
 
     def onnx_export(self, img, img_metas):
         return self.generator.onnx_export(img, img_metas)

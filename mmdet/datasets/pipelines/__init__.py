@@ -11,7 +11,7 @@ from .loading import (LoadAnnotations, LoadImageFromFile, LoadImageFromWebcam,
 from .test_time_aug import MultiScaleFlipAug
 from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MixUp, Mosaic, MinOverlapRandomCrop,
                          Normalize, ReinhardNormalize, Pad, NormalizeDistortion, ReinhardDistortion,
-                         PhotoMetricDistortion, RandomAffine,
+                         VahadaneDistortion, PhotoMetricDistortion, RandomAffine,
                          RandomCenterCropPad, RandomCrop, RandomFlip, RandomShift, Resize, SegRescale)
 
 __all__ = [
@@ -21,6 +21,7 @@ __all__ = [
     'LoadMultiChannelImageFromFiles', 'LoadProposals', 'MultiScaleFlipAug',
     'Resize', 'RandomFlip', 'Pad', 'RandomCrop', 'Normalize', 'ReinhardNormalize', 'SegRescale',
     'MinIoURandomCrop', 'MinOverlapRandomCrop', 'Expand', 'NormalizeDistortion', 'ReinhardDistortion',
+    'VahadaneDistortion',
     'PhotoMetricDistortion', 'Albu', 'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate', 'RandomShift', 'Mosaic', 'MixUp',

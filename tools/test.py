@@ -116,6 +116,8 @@ def list_ckpt(inputs):
                     stems.append(epoch)
                 except:
                     raise
+            else:
+                stems.append(filename)
         stems = sorted(stems, reverse=True)
         root = inputs
     elif os.path.isfile(inputs):
@@ -152,7 +154,6 @@ def main():
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
 
-    cfg.model.pretrained = None
     if cfg.model.get('neck'):
         if isinstance(cfg.model.neck, list):
             for neck_cfg in cfg.model.neck:
@@ -258,12 +259,11 @@ def main():
                     eval_kwargs.pop(key, None)
                 eval_kwargs.update(dict(metric=args.eval, **kwargs))
                 metric = dataset.evaluate(outputs, **eval_kwargs)
-                print(metric)
+                print(f'{epoch}: {metric}')
                 metric_dict = dict(config=args.config, metric=metric)
                 metric_dicts[epoch] = metric_dict
-                mmcv.dump(metric_dicts, json_file)
-
-
+                if args.work_dir is not None and rank == 0:
+                    mmcv.dump(metric_dicts, json_file)
 
 
 if __name__ == '__main__':
