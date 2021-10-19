@@ -7,10 +7,10 @@ from ..builder import DETECTORS
 
 
 @DETECTORS.register_module()
-class CycleGAN(GAN):
-    class Pool(list):
+class MBGAN(GAN):
+    class MemoryBank(list):
         def __init__(self, size, probability=0.5):
-            super(CycleGAN.Pool, self).__init__()
+            super(MBGAN.MemoryBank, self).__init__()
             self._size = size
             self._probability = probability
 
@@ -35,13 +35,13 @@ class CycleGAN(GAN):
                  loss=dict(type='MSELoss', loss_weight=0.01),
                  pool=dict(size=50, probability=0.5),
                  **kwargs):
-        super(CycleGAN, self).__init__(generator, discriminator, loss, **kwargs)
+        super(MBGAN, self).__init__(generator, discriminator, loss, **kwargs)
 
         self.pools = None
-        self.build_pool = lambda: self.Pool(**pool)
+        self.build_pool = lambda: self.MemoryBank(**pool)
 
     def discriminate(self, real, fake):
-        real, fake = super(CycleGAN, self).discriminate(real, fake)
+        real, fake = super(MBGAN, self).discriminate(real, fake)
         if self.pools is None:
             self.pools = [self.build_pool() for _ in fake]
         assert len(real) == len(fake) == len(self.pools)

@@ -5,7 +5,7 @@ from .base import BaseDetector
 from .cascade_rcnn import CascadeRCNN
 from .centernet import CenterNet
 from .cornernet import CornerNet
-from .cyclegan import CycleGAN
+from .mbgan import MBGAN
 from .deformable_detr import DeformableDETR
 from .detr import DETR
 from .fast_rcnn import FastRCNN
@@ -47,5 +47,5 @@ __all__ = [
     'NASFCOS', 'PointRend', 'GFL', 'CornerNet', 'PAA', 'YOLOV3', 'YOLACT',
     'VFNet', 'DETR', 'TridentFasterRCNN', 'SparseRCNN', 'SCNet',
     'DeformableDETR', 'AutoAssign', 'YOLOF', 'CenterNet', 'YOLOX',
-    'TwoStagePanopticSegmentor', 'PanopticFPN', 'GAN', 'CycleGAN'
+    'TwoStagePanopticSegmentor', 'PanopticFPN', 'GAN', 'MBGAN'
 ]
