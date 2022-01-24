@@ -35,6 +35,12 @@ def parse_args():
         help='Whether to fuse conv and bn, this will slightly increase'
         'the inference speed')
     parser.add_argument(
+        '--gpu-ids',
+        type=int,
+        nargs='+',
+        help='ids of gpus to use '
+        '(only applicable to non-distributed testing)')
+    parser.add_argument(
         '--format-only',
         action='store_true',
         help='Format the output results without perform evaluation. It is'
@@ -146,10 +152,6 @@ def main():
     cfg = Config.fromfile(args.config)
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
-    # import modules from string list.
-    if cfg.get('custom_imports', None):
-        from mmcv.utils import import_modules_from_strings
-        import_modules_from_strings(**cfg['custom_imports'])
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
@@ -182,9 +184,20 @@ def main():
             for ds_cfg in cfg.data.test:
                 ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
 
+    if args.gpu_ids is not None:
+        cfg.gpu_ids = args.gpu_ids
+    else:
+        cfg.gpu_ids = range(1)
+
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
         distributed = False
+        if len(cfg.gpu_ids) > 1:
+            warnings.warn(
+                f'We treat {cfg.gpu_ids} as gpu-ids, and reset to '
+                f'{cfg.gpu_ids[0:1]} as gpu-ids to avoid potential error in '
+                'non-distribute testing time.')
+            cfg.gpu_ids = cfg.gpu_ids[0:1]
     else:
         distributed = True
         init_dist(args.launcher, **cfg.dist_params)
@@ -229,41 +242,40 @@ def main():
         else:
             model.CLASSES = dataset.CLASSES
 
-        if not distributed:
-            model = MMDataParallel(model, device_ids=[args.gpu])
-            outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
-                                      args.show_score_thr)
-        else:
-            model = MMDistributedDataParallel(
-                model.cuda(),
-                device_ids=[torch.cuda.current_device()],
-                broadcast_buffers=False)
-            outputs = multi_gpu_test(model, data_loader, args.tmpdir,
-                                     args.gpu_collect)
+        model = MMDataParallel(model, device_ids=cfg.gpu_ids)
+        outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
+                                  args.show_score_thr)
+    else:
+        model = MMDistributedDataParallel(
+            model.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False)
+        outputs = multi_gpu_test(model, data_loader, args.tmpdir,
+                                 args.gpu_collect)
 
-        rank, _ = get_dist_info()
-        if rank == 0:
-            if args.out:
-                print(f'\nwriting results to {args.out}')
-                mmcv.dump(outputs, args.out)
-            kwargs = {} if args.eval_options is None else args.eval_options
-            if args.format_only:
-                dataset.format_results(outputs, **kwargs)
-            if args.eval:
-                eval_kwargs = cfg.get('evaluation', {}).copy()
-                # hard-code way to remove EvalHook args
-                for key in [
-                        'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
-                        'rule'
-                ]:
-                    eval_kwargs.pop(key, None)
-                eval_kwargs.update(dict(metric=args.eval, **kwargs))
-                metric = dataset.evaluate(outputs, **eval_kwargs)
-                print(f'{epoch}: {metric}')
-                metric_dict = dict(config=args.config, metric=metric)
-                metric_dicts[epoch] = metric_dict
-                if args.work_dir is not None and rank == 0:
-                    mmcv.dump(metric_dicts, json_file)
+    rank, _ = get_dist_info()
+    if rank == 0:
+        if args.out:
+            print(f'\nwriting results to {args.out}')
+            mmcv.dump(outputs, args.out)
+        kwargs = {} if args.eval_options is None else args.eval_options
+        if args.format_only:
+            dataset.format_results(outputs, **kwargs)
+        if args.eval:
+            eval_kwargs = cfg.get('evaluation', {}).copy()
+            # hard-code way to remove EvalHook args
+            for key in [
+                    'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
+                    'rule', 'dynamic_intervals'
+            ]:
+                eval_kwargs.pop(key, None)
+            eval_kwargs.update(dict(metric=args.eval, **kwargs))
+            metric = dataset.evaluate(outputs, **eval_kwargs)
+            print(metric)
+            metric_dict = dict(config=args.config, metric=metric)
+            if args.work_dir is not None and rank == 0:
+                mmcv.dump(metric_dict, json_file)
+    if not distributed:
 
 
 if __name__ == '__main__':

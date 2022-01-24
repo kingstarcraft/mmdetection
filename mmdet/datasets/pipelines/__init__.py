@@ -12,7 +12,7 @@ from .test_time_aug import MultiScaleFlipAug
 from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MixUp, Mosaic, MinOverlapRandomCrop,
                          Normalize, ReinhardNormalize, Pad, NormalizeDistortion, ReinhardDistortion,
                          VahadaneDistortion, PhotoMetricDistortion, RandomAffine,
-                         RandomCenterCropPad, RandomCrop, RandomFlip, RandomShift, Resize, SegRescale)
+                         RandomCenterCropPad, RandomCrop, RandomFlip, RandomShift, Resize, SegRescale, YOLOXHSVRandomAug)
 
 __all__ = [
     'Compose', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToDataContainer',
@@ -25,5 +25,5 @@ __all__ = [
     'PhotoMetricDistortion', 'Albu', 'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate', 'RandomShift', 'Mosaic', 'MixUp',
-    'RandomAffine'
+    'RandomAffine', 'YOLOXHSVRandomAug'
 ]

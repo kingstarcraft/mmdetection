@@ -12,7 +12,7 @@ import torch.nn as nn
 from mmcv.runner import (CheckpointHook, IterTimerHook, PaviLoggerHook,
                          build_runner)
 from torch.nn.init import constant_
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from mmdet.core.hook import ExpMomentumEMAHook, YOLOXLrUpdaterHook
 from mmdet.core.hook.sync_norm_hook import SyncNormHook
@@ -254,11 +254,30 @@ def test_sync_random_size_hook():
     # Only used to prevent program errors
     SyncRandomSizeHook()
 
-    loader = DataLoader(torch.ones((5, 2)))
+    class DemoDataset(Dataset):
+
+        def __getitem__(self, item):
+            return torch.ones(2)
+
+        def __len__(self):
+            return 5
+
+        def update_dynamic_scale(self, dynamic_scale):
+            pass
+
+    loader = DataLoader(DemoDataset())
     runner = _build_demo_runner()
-    runner.register_hook_from_cfg(dict(type='SyncRandomSizeHook'))
+    runner.register_hook_from_cfg(
+        dict(type='SyncRandomSizeHook', device='cpu'))
     runner.run([loader, loader], [('train', 1), ('val', 1)])
     shutil.rmtree(runner.work_dir)
+
+    if torch.cuda.is_available():
+        runner = _build_demo_runner()
+        runner.register_hook_from_cfg(
+            dict(type='SyncRandomSizeHook', device='cuda'))
+        runner.run([loader, loader], [('train', 1), ('val', 1)])
+        shutil.rmtree(runner.work_dir)
 
 
 @pytest.mark.parametrize('set_loss', [
@@ -304,3 +323,32 @@ def test_check_invalid_loss_hook(set_loss):
         with pytest.raises(AssertionError):
             runner.run([loader], [('train', 1)])
     shutil.rmtree(runner.work_dir)
+
+
+def test_set_epoch_info_hook():
+    """Test SetEpochInfoHook."""
+
+    class DemoModel(nn.Module):
+
+        def __init__(self):
+            super().__init__()
+            self.epoch = 0
+            self.linear = nn.Linear(2, 1)
+
+        def forward(self, x):
+            return self.linear(x)
+
+        def train_step(self, x, optimizer, **kwargs):
+            return dict(loss=self(x))
+
+        def set_epoch(self, epoch):
+            self.epoch = epoch
+
+    loader = DataLoader(torch.ones((5, 2)))
+    runner = _build_demo_runner(max_epochs=3)
+
+    demo_model = DemoModel()
+    runner.model = demo_model
+    runner.register_hook_from_cfg(dict(type='SetEpochInfoHook'))
+    runner.run([loader], [('train', 1)])
+    assert demo_model.epoch == 2

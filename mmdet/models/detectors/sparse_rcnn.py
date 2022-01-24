@@ -10,7 +10,8 @@ class SparseRCNN(TwoStageDetector):
 
     def __init__(self, *args, **kwargs):
         super(SparseRCNN, self).__init__(*args, **kwargs)
-        assert self.with_rpn, 'Sparse R-CNN do not support external proposals'
+        assert self.with_rpn, 'Sparse R-CNN and QueryInst ' \
+            'do not support external proposals'
 
     def forward_train(self,
                       img,
@@ -22,7 +23,7 @@ class SparseRCNN(TwoStageDetector):
                       proposals=None,
                       return_feature=False,
                       **kwargs):
-        """Forward function of SparseR-CNN in train stage.
+        """Forward function of SparseR-CNN and QueryInst in train stage.
 
         Args:
             img (Tensor): of shape (N, C, H, W) encoding input images.
@@ -38,7 +39,7 @@ class SparseRCNN(TwoStageDetector):
             gt_bboxes_ignore (None | list[Tensor): specify which bounding
                 boxes can be ignored when computing the loss.
             gt_masks (List[Tensor], optional) : Segmentation masks for
-                each box. But we don't support it in this architecture.
+                each box. This is required to train QueryInst.
             proposals (List[Tensor], optional): override rpn proposals with
                 custom proposals. Use when `with_rpn` is False.
             return_feature: Switch whether to return feature.
@@ -47,9 +48,8 @@ class SparseRCNN(TwoStageDetector):
             dict[str, Tensor]: a dictionary of loss components
         """
 
-        assert proposals is None, 'Sparse R-CNN does not support' \
-                                  ' external proposals'
-        assert gt_masks is None, 'Sparse R-CNN does not instance segmentation'
+        assert proposals is None, 'Sparse R-CNN and QueryInst ' \
+            'do not support external proposals'
 
         x = self.extract_feat(img)
         proposal_boxes, proposal_features, imgs_whwh = \
@@ -85,14 +85,14 @@ class SparseRCNN(TwoStageDetector):
         x = self.extract_feat(img)
         proposal_boxes, proposal_features, imgs_whwh = \
             self.rpn_head.simple_test_rpn(x, img_metas)
-        bbox_results = self.roi_head.simple_test(
+        results = self.roi_head.simple_test(
             x,
             proposal_boxes,
             proposal_features,
             img_metas,
             imgs_whwh=imgs_whwh,
             rescale=rescale)
-        return bbox_results
+        return results
 
     def forward_dummy(self, img):
         """Used for computing network flops.
