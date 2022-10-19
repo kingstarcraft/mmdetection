@@ -10,17 +10,37 @@ import torch.distributed as dist
 from mmcv.runner import BaseModule, auto_fp16
 
 from mmdet.core.visualization import imshow_det_bboxes
+from mmdet.datasets.pipelines import compose
 
 
 class BaseDetector(BaseModule, metaclass=ABCMeta):
     """Base class for detectors."""
 
-    def __init__(self, init_cfg=None, window=None, nms=None):
+    def __init__(
+            self,
+            init_cfg=None, window=None, nms=None,
+            train_transforms=None, test_transforms=None
+    ):
         super(BaseDetector, self).__init__(init_cfg)
         self.fp16_enabled = False
         self.window = window
         if nms is not None:
             self.nms = zero.boxes.NMS(**nms)
+
+        if train_transforms is not None:
+            self.train_transforms = compose.Sequential(train_transforms)
+
+        if test_transforms is not None:
+            self.test_transforms = compose.Sequential(test_transforms)
+
+
+    @property
+    def with_train_transforms(self):
+        return hasattr(self, 'train_transforms') and self.train_transforms is not None
+
+    @property
+    def with_test_transforms(self):
+        return hasattr(self, 'test_transforms') and self.test_transforms is not None
 
     @property
     def with_window(self):
@@ -244,8 +264,12 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             return self.onnx_export(img[0], img_metas[0])
 
         if return_loss:
+            if self.with_train_transforms:
+                img = self.train_transforms(img, img_metas)
             return self.forward_train(img, img_metas, **kwargs)
         else:
+            if self.with_test_transforms:
+                img = self.test_transforms(img, img_metas)
             return self.forward_test(img, img_metas, **kwargs)
 
     def _parse_losses(self, losses):

@@ -2,7 +2,7 @@
 from .auto_augment import (AutoAugment, BrightnessTransform, ColorTransform,
                            ContrastTransform, EqualizeTransform, Rotate, Shear,
                            Translate)
-from .compose import Compose
+from .compose import Compose, Sequential
 from .formating import (Collect, DefaultFormatBundle, ImageToTensor,
                         ToDataContainer, ToTensor, Transpose, to_tensor)
 from .instaboost import InstaBoost
@@ -15,7 +15,7 @@ from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MixUp, Mosaic, 
                          RandomCenterCropPad, RandomCrop, RandomFlip, RandomShift, Resize, SegRescale, YOLOXHSVRandomAug)
 
 __all__ = [
-    'Compose', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToDataContainer',
+    'Compose', 'Sequential', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToDataContainer',
     'Transpose', 'Collect', 'DefaultFormatBundle', 'LoadAnnotations',
     'LoadImageFromFile', 'LoadImageFromWebcam',
     'LoadMultiChannelImageFromFiles', 'LoadProposals', 'MultiScaleFlipAug',
