@@ -265,11 +265,13 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
 
         if return_loss:
             if self.with_train_transforms:
-                img = self.train_transforms(img, img_metas)
+                with torch.no_grad():
+                    img, img_metas, kwargs = self.train_transforms(img, img_metas, **kwargs)
             return self.forward_train(img, img_metas, **kwargs)
         else:
             if self.with_test_transforms:
-                img = self.test_transforms(img, img_metas)
+                with torch.no_grad():
+                    img, img_metas, kwargs = self.test_transforms(img, img_metas, **kwargs)
             return self.forward_test(img, img_metas, **kwargs)
 
     def _parse_losses(self, losses):

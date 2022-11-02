@@ -5,7 +5,7 @@ from mmcv.utils import build_from_cfg
 
 from ..builder import PIPELINES
 
-from mmcv.runner import BaseModule
+import mmcv.runner as  runner
 from abc import ABCMeta
 
 @PIPELINES.register_module()
@@ -55,7 +55,7 @@ class Compose:
 
 
 @PIPELINES.register_module()
-class Sequential(BaseModule, metaclass=ABCMeta):
+class Sequential(runner.BaseModule, metaclass=ABCMeta):
     """Compose multiple transforms sequentially.
 
     Args:
@@ -75,8 +75,9 @@ class Sequential(BaseModule, metaclass=ABCMeta):
                 self.transforms.append(transform)
             else:
                 raise TypeError('transform must be callable or a dict')
+        self.transforms = runner.Sequential(*self.transforms)
 
-    def forward(self, data):
+    def forward(self, img, img_metas, **kwargs):
         """Call function to apply transforms sequentially.
 
         Args:
@@ -87,10 +88,8 @@ class Sequential(BaseModule, metaclass=ABCMeta):
         """
 
         for t in self.transforms:
-            data = t(data)
-            if data is None:
-                return None
-        return data
+            img, img_metas, kwargs = t(img, img_metas, **kwargs)
+        return img, img_metas, kwargs
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '('

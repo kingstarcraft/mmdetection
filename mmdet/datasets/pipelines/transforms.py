@@ -12,7 +12,7 @@ import mmcv
 import numpy as np
 from numpy import random
 from zero.image import normalizer
-from zero import math
+from zero import stats
 
 from mmdet.core import PolygonMasks, find_inside_bboxes
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
@@ -1021,8 +1021,8 @@ class ReinhardDistortion:
             src_mean = np.abs(dst_mean[-1] - dst_mean[0]) * ratio
             src_std = np.abs(dst_std[-1] - dst_std[0]) * ratio
             self.sampler = {
-                'src': [math.Uniform(src_mean), math.Uniform(src_std)],
-                'dst': [math.Uniform((mean[0], mean[1])), math.Uniform((std[0], std[1]))]
+                'src': [stats.sample.Uniform(src_mean), stats.sample.Uniform(src_std)],
+                'dst': [stats.sample.Uniform((mean[0], mean[1])), stats.sample.Uniform((std[0], std[1]))]
             }
         elif isinstance(sample, list):
             self.sampler = [
@@ -1057,7 +1057,7 @@ class ReinhardDistortion:
                     reinhard = self.normalizer(results[key], dst, src, offset)
                     mask = np.logical_or(reinhard < self.clip_range[0], reinhard > self.clip_range[1])
                     threshold = max(mask.sum() / mask.nbytes, threshold)
-                    data[key] = np.clip(reinhard, *self.clip_range)
+                    data[key] = np.clip(reinhard, *self.clip_range).astype('float32')
                 if threshold <= self.threshold:
                     results.update(data)
                     return results
@@ -1087,7 +1087,7 @@ class VahadaneDistortion:
                 self.sampler.weights_ = np.array(sample['weight'])
                 self.sampler.covariances_ = np.array(sample['covariance'])
             elif 'max' in sample and 'min' in sample:
-                self.sampler = math.Uniform((sample['min'], sample['max']))
+                self.sampler = stats.sample.Uniform((sample['min'], sample['max']))
             else:
                 raise NotImplementedError
         elif isinstance(sample, list):
@@ -1103,7 +1103,7 @@ class VahadaneDistortion:
     def sample(self):
         if isinstance(self.sampler, list):
             return self.sampler[np.random.randint(0, len(self.sampler))]
-        elif isinstance(self.sampler, math.Uniform):
+        elif isinstance(self.sampler, stats.sample.Uniform):
             return self.sampler().reshape([-1, 3])
         else:
             return self.sampler.sample()[0].reshape([-1, 3])
@@ -1128,7 +1128,7 @@ class VahadaneDistortion:
                     vahadane = self.normalizer(rgb, dst=dst, src=src, brightness=brightness)
                     mask = np.logical_or(vahadane < self.clip_range[0], vahadane > self.clip_range[1])
                     threshold = max(mask.sum() / mask.nbytes, threshold)
-                    vahadane = np.clip(vahadane, *self.clip_range).astype('uint8')
+                    vahadane = np.clip(vahadane, *self.clip_range).astype('float32')
                     data[key] = vahadane if self.rgb else vahadane[..., ::-1]
                 if threshold <= self.threshold:
                     results.update(data)
