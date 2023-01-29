@@ -159,8 +159,6 @@ class BaseDetector(BaseModule, metaclass=ABCMeta):
             if self.with_window:
                 size = np.array(self.window['size'])
                 step = np.array(self.window['step']) if 'step' in self.window else size
-                # merge = zero.boxes.Merge(threshold=0.1)
-                # filter = zero.boxes.Filter(threshold=threshold)
                 patches = zero.matrix.crop(imgs[0], size, size - step, start=-2, end=None)
                 batch_size = len(img_metas[0])
                 outputs = [None for _ in range(batch_size)]

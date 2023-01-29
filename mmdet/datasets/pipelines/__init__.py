@@ -6,22 +6,22 @@ from .compose import Compose
 from .formating import (Collect, DefaultFormatBundle, ImageToTensor,
                         ToDataContainer, ToTensor, Transpose, to_tensor)
 from .instaboost import InstaBoost
-from .loading import (LoadAnnotations, LoadImageFromFile, LoadImageFromWebcam,
+from .loading import (LoadAnnotations, LoadImageFromFile, LoadMidogFromFile, LoadImageFromWebcam,
                       LoadMultiChannelImageFromFiles, LoadProposals)
 from .test_time_aug import MultiScaleFlipAug
 from .transforms import (Albu, CutOut, Expand, MinIoURandomCrop, MixUp, Mosaic, MinOverlapRandomCrop,
                          Normalize, ReinhardNormalize, Pad, NormalizeDistortion, ReinhardDistortion,
-                         VahadaneDistortion, PhotoMetricDistortion, RandomAffine,
+                         VahadaneDistortion, QualityDistribution, QualityNormalize, PhotoMetricDistortion, RandomAffine,
                          RandomCenterCropPad, RandomCrop, RandomFlip, RandomShift, Resize, SegRescale, YOLOXHSVRandomAug)
 
 __all__ = [
     'Compose', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToDataContainer',
-    'Transpose', 'Collect', 'DefaultFormatBundle', 'LoadAnnotations',
+    'Transpose', 'Collect', 'DefaultFormatBundle', 'LoadAnnotations', 'LoadMidogFromFile',
     'LoadImageFromFile', 'LoadImageFromWebcam',
     'LoadMultiChannelImageFromFiles', 'LoadProposals', 'MultiScaleFlipAug',
     'Resize', 'RandomFlip', 'Pad', 'RandomCrop', 'Normalize', 'ReinhardNormalize', 'SegRescale',
     'MinIoURandomCrop', 'MinOverlapRandomCrop', 'Expand', 'NormalizeDistortion', 'ReinhardDistortion',
-    'VahadaneDistortion',
+    'VahadaneDistortion', 'QualityDistribution', 'QualityNormalize',
     'PhotoMetricDistortion', 'Albu', 'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate', 'RandomShift', 'Mosaic', 'MixUp',

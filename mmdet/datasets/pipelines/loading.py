@@ -1,4 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import os
 import os.path as osp
 
 import mmcv
@@ -81,6 +82,14 @@ class LoadImageFromFile:
                     f"color_type='{self.color_type}', "
                     f'file_client_args={self.file_client_args})')
         return repr_str
+
+
+@PIPELINES.register_module()
+class LoadMidogFromFile(LoadImageFromFile):
+    def __call__(self, results):
+        results = super(LoadMidogFromFile, self).__call__(results)
+        results['domain'] = results['img_info']['device']
+        return results
 
 
 @PIPELINES.register_module()

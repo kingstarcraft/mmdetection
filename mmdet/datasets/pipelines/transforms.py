@@ -11,8 +11,10 @@ import sklearn.mixture
 import mmcv
 import numpy as np
 from numpy import random
+
 from zero.image import normalizer
-from zero import math
+from zero import stats
+from zero.image import quality
 
 from mmdet.core import PolygonMasks, find_inside_bboxes
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
@@ -1021,8 +1023,8 @@ class ReinhardDistortion:
             src_mean = np.abs(dst_mean[-1] - dst_mean[0]) * ratio
             src_std = np.abs(dst_std[-1] - dst_std[0]) * ratio
             self.sampler = {
-                'src': [math.Uniform(src_mean), math.Uniform(src_std)],
-                'dst': [math.Uniform((mean[0], mean[1])), math.Uniform((std[0], std[1]))]
+                'src': [stats.sample.Uniform(src_mean), stats.sample.Uniform(src_std)],
+                'dst': [stats.sample.Uniform((mean[0], mean[1])), stats.sample.Uniform((std[0], std[1]))]
             }
         elif isinstance(sample, list):
             self.sampler = [
@@ -1087,7 +1089,7 @@ class VahadaneDistortion:
                 self.sampler.weights_ = np.array(sample['weight'])
                 self.sampler.covariances_ = np.array(sample['covariance'])
             elif 'max' in sample and 'min' in sample:
-                self.sampler = math.Uniform((sample['min'], sample['max']))
+                self.sampler = stats.sample.Uniform((sample['min'], sample['max']))
             else:
                 raise NotImplementedError
         elif isinstance(sample, list):
@@ -1096,14 +1098,14 @@ class VahadaneDistortion:
             raise NotImplementedError
         self.threshold = threshold
         self.probability = probability
-        self.normalizer = normalizer.VahadaneNormalRGB() #if rgb else normalizer.VahadaneNormalBGR()
+        self.normalizer = normalizer.VahadaneNormalRGB()  # if rgb else normalizer.VahadaneNormalBGR()
         self.clip_range = clip_range
         self.rgb = rgb
 
     def sample(self):
         if isinstance(self.sampler, list):
             return self.sampler[np.random.randint(0, len(self.sampler))]
-        elif isinstance(self.sampler, math.Uniform):
+        elif isinstance(self.sampler, stats.sample.Uniform):
             return self.sampler().reshape([-1, 3])
         else:
             return self.sampler.sample()[0].reshape([-1, 3])
@@ -1128,7 +1130,7 @@ class VahadaneDistortion:
                     vahadane = self.normalizer(rgb, dst=dst, src=src, brightness=brightness)
                     mask = np.logical_or(vahadane < self.clip_range[0], vahadane > self.clip_range[1])
                     threshold = max(mask.sum() / mask.nbytes, threshold)
-                    vahadane = np.clip(vahadane, *self.clip_range).astype('uint8')
+                    vahadane = np.clip(vahadane, *self.clip_range).astype('float32')
                     data[key] = vahadane if self.rgb else vahadane[..., ::-1]
                 if threshold <= self.threshold:
                     results.update(data)
@@ -1140,11 +1142,96 @@ class VahadaneDistortion:
         repr_str = self.__class__.__name__
         repr_str += '\nclip_range='
         repr_str += 'None' if self.clip_range is None else f'{list(self.clip_range)}'
-        #repr_str += f', rgb={isinstance(self.normalizer, normalizer.VahadaneNormalRGB)}, '
+        # repr_str += f', rgb={isinstance(self.normalizer, normalizer.VahadaneNormalRGB)}, '
         repr_str += f', rgb={self.rgb}, '
         repr_str += f'probability={self.probability}, '
         repr_str += f'offset={self.offset}, '
         repr_str += f'threshold={self.threshold})\n'
+        return repr_str
+
+
+@PIPELINES.register_module()
+class QualityDistribution:
+    def __init__(self, domains, limit=None, mean=False, rgb=False, clip_range=None):
+        super(QualityDistribution, self).__init__()
+        density, const = {}, {}
+        self.domain = []
+        for domain, value in domains.items():
+            if domain in limit:
+                continue
+            self.domain.append(domain)
+            density[domain] = np.array(value['density'])
+            const[domain] = np.array(value['const'])
+
+        self.density = density
+        self.const = const
+        self.mean = mean
+        self.rgb = rgb
+        self.clip_range = clip_range
+
+    def __call__(self, results):
+        start = results.get('domain')
+        end = np.random.choice(self.domain)
+        density_start = self.density[start]
+        density_end = self.density[end]
+        density_alpha = np.random.uniform(0, 1)
+        density_target = stats.solver.solve(density_start, density_end, density_alpha)
+        if self.mean:
+            const_start = self.const[start]
+            const_end = self.const[end]
+            const_alpha = np.random.uniform(0, 1)
+            const = const_start * (1 - const_alpha) + const_alpha * const_end
+        else:
+            const = None
+
+        for key in results.get('img_fields', ['img']):
+            rgb = results[key] if self.rgb else results[key][..., ::-1].copy()
+            img = quality.transform(rgb, density_start, density_target, const)
+            if self.clip_range is not None:
+                img = np.clip(img, *self.clip_range)
+            results[key] = img if self.rgb else img[..., ::-1]
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += '\nclip_range='
+        repr_str += 'None' if self.clip_range is None else f'{list(self.clip_range)}'
+        repr_str += f', rgb={self.rgb}, mean={self.mean}\n'
+        return repr_str
+
+
+@PIPELINES.register_module()
+class QualityNormalize:
+    def __init__(self, domains, target, rgb=False, clip_range=None):
+        super(QualityNormalize, self).__init__()
+        density, const = {}, {}
+        for domain, value in domains.items():
+            density[domain] = np.array(value['density'])
+            const[domain] = np.array(value['const'])
+
+        self.target = target
+        self.density = density
+        self.const = const
+        self.rgb = rgb
+        self.clip_range = clip_range
+
+    def __call__(self, results):
+        start = results.get('domain')
+        density_start = self.density[start]
+        density_end = self.density[self.target]
+        for key in results.get('img_fields', ['img']):
+            rgb = results[key] if self.rgb else results[key][..., ::-1].copy()
+            img = quality.transform(rgb, density_start, density_end, self.const[self.target])
+            if self.clip_range is not None:
+                img = np.clip(img, *self.clip_range)
+            results[key] = img if self.rgb else img[..., ::-1]
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += '\nclip_range='
+        repr_str += 'None' if self.clip_range is None else f'{list(self.clip_range)}'
+        repr_str += f', rgb={self.rgb}, target={self.target}\n'
         return repr_str
 
 
